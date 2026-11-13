@@ -1,0 +1,301 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-prompt), ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #070912;
+  --color-ink-2: #0d1020;
+  --color-ink-3: #141833;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-fg: #eef0ff;
+  --color-muted: #9aa3c0;
+  --color-dim: #6b7394;
+  --color-leaf: #34d399;
+  --color-aqua: #22d3ee;
+  --color-grape: #a78bfa;
+  --color-rose: #f472b6;
+  --color-gold: #fbbf24;
+  --color-danger: #fb7185;
+  --animate-float: float 14s ease-in-out infinite;
+  --animate-float-slow: float 22s ease-in-out infinite reverse;
+  --animate-shine: shine 3.2s linear infinite;
+  --animate-pop: pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+  --animate-rise: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-spin-slow: spin 12s linear infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(4%, -6%, 0) scale(1.08);
+    }
+    66% {
+      transform: translate3d(-5%, 4%, 0) scale(0.95);
+    }
+  }
+  @keyframes shine {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes rise {
+    from {
+      transform: translateY(18px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}
+
+html {
+  color-scheme: dark;
+  background: var(--color-ink);
+  overflow-x: clip;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+::selection {
+  background: rgb(52 211 153 / 0.35);
+}
+
+/* ---------- พื้นหลังมีแสงลอย ---------- */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.aurora::before,
+.aurora::after,
+.aurora > i {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.55;
+}
+.aurora::before {
+  width: 55vw;
+  height: 55vw;
+  left: -12vw;
+  top: -18vw;
+  background: radial-gradient(circle, #10b98155, transparent 65%);
+  animation: var(--animate-float);
+}
+.aurora::after {
+  width: 50vw;
+  height: 50vw;
+  right: -14vw;
+  top: 8vh;
+  background: radial-gradient(circle, #8b5cf650, transparent 65%);
+  animation: var(--animate-float-slow);
+}
+.aurora > i {
+  width: 45vw;
+  height: 45vw;
+  left: 25vw;
+  bottom: -25vw;
+  background: radial-gradient(circle, #ec489940, transparent 65%);
+  animation: var(--animate-float);
+  animation-delay: -6s;
+}
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%);
+}
+
+/* ---------- ชิ้นส่วนที่ใช้บ่อย ---------- */
+@utility glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.025));
+  border: 1px solid var(--color-line);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+@utility text-gradient {
+  background: linear-gradient(100deg, #6ee7b7 0%, #22d3ee 35%, #a78bfa 70%, #f472b6 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility text-shine {
+  background: linear-gradient(100deg, #6ee7b7 0%, #22d3ee 25%, #fff 50%, #a78bfa 75%, #6ee7b7 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: var(--animate-shine);
+}
+
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.9rem;
+  font-weight: 600;
+  padding: 0.7rem 1.15rem;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s;
+  user-select: none;
+  &:active {
+    transform: scale(0.97);
+  }
+  &:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+@utility btn-primary {
+  color: #04140e;
+  background: linear-gradient(135deg, #6ee7b7, #22d3ee);
+  box-shadow:
+    0 8px 30px -8px rgb(34 211 238 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.5);
+  &:hover {
+    box-shadow:
+      0 10px 40px -6px rgb(34 211 238 / 0.75),
+      inset 0 1px 0 rgb(255 255 255 / 0.5);
+  }
+}
+
+@utility btn-ghost {
+  color: var(--color-fg);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid var(--color-line);
+  &:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+}
+
+@utility btn-gold {
+  color: #241500;
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  box-shadow: 0 8px 30px -10px rgb(245 158 11 / 0.7);
+}
+
+@utility input {
+  width: 100%;
+  border-radius: 0.9rem;
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid var(--color-line);
+  padding: 0.8rem 1rem;
+  color: var(--color-fg);
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+  &::placeholder {
+    color: var(--color-dim);
+  }
+  &:focus {
+    border-color: rgb(52 211 153 / 0.6);
+    box-shadow: 0 0 0 4px rgb(52 211 153 / 0.15);
+  }
+}
+
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--color-line);
+  background: rgb(255 255 255 / 0.05);
+}
+
+/* การ์ดสินค้า: เรืองแสงตามสีของพาส (--c) */
+.pass-card {
+  --c: #34d399;
+  position: relative;
+  isolation: isolate;
+}
+.pass-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 75%, transparent), transparent 40%, transparent 70%, color-mix(in srgb, var(--c) 40%, transparent));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+.pass-card .glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--c) 30%, transparent), transparent 60%);
+  z-index: -1;
+  transition: opacity 0.3s;
+}
+.pass-card:hover {
+  transform: translateY(-4px);
+}
+.pass-card:hover .glow {
+  opacity: 1.6;
+  filter: brightness(1.25);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
