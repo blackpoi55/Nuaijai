@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { CheckCircle2, Clock, History, Receipt, ShieldCheck, Wallet, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, History, Receipt, Wallet, XCircle } from "lucide-react";
 import { getDb, schema } from "@/db";
 import { CouponBox } from "@/components/coupon-box";
 import { TopupTabs } from "@/components/topup-tabs";
@@ -30,11 +30,10 @@ export default async function TopupPage() {
     <div className="mx-auto max-w-5xl px-4 py-10">
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <section className="glass animate-rise relative overflow-hidden rounded-[2rem] p-6 sm:p-8">
-          <div className="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-orange-500/15 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -left-20 size-72 rounded-full bg-sky-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-amber-200/10 blur-3xl" />
           <div className="relative">
-            <h1 className="text-3xl font-black">เติมแต้ม</h1>
-            <p className="mt-1 text-muted">1 บาท = 1 แต้ม • ใช้แต้มซื้อพาสและไอเทม</p>
+            <h1 className="text-4xl font-semibold">เติมแต้ม</h1>
+            <p className="mt-1 text-sm text-dim">1 บาท = 1 แต้ม</p>
 
             <div className="my-6 flex items-center gap-4 rounded-2xl bg-black/30 p-4">
               <div className="grid size-12 place-items-center rounded-xl bg-amber-300/15">
@@ -48,9 +47,6 @@ export default async function TopupPage() {
 
             <TopupTabs angpaoOpen={st.angpaoOpen} promptpayOpen={st.promptpayOpen} promptpayId={promptPayId()} contactUrl={st.contactUrl} />
 
-            <p className="mt-6 flex items-center gap-1.5 text-xs text-dim">
-              <ShieldCheck className="size-4 shrink-0" /> ซองหรือสลิปหนึ่งใบใช้ได้ครั้งเดียว • มีปัญหาติดต่อแอดมิน
-            </p>
           </div>
         </section>
 

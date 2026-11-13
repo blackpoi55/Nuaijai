@@ -43,7 +43,7 @@ export function TopupForm() {
           <ClipboardPaste className="size-4" /> วาง
         </button>
       </div>
-      <button disabled={pending} className="btn w-full !py-4 text-base text-white shadow-lg shadow-orange-500/30 [background:linear-gradient(135deg,#fb923c,#ef4444)]">
+      <button disabled={pending} className="btn btn-primary w-full !py-4 text-base">
         {pending ? (
           <>
             <Loader2 className="size-5 animate-spin" /> กำลังตรวจซอง...

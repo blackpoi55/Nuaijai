@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { Prompt } from "next/font/google";
+import { Noto_Serif_Thai, Prompt } from "next/font/google";
 import { CartProvider } from "@/components/cart";
 import { Nav } from "@/components/nav";
+import { PushBanner } from "@/components/push-banner";
 import { PwaProvider } from "@/components/pwa";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -15,7 +16,15 @@ import "./globals.css";
 const prompt = Prompt({
   variable: "--font-prompt",
   subsets: ["thai", "latin"],
-  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+});
+
+// หัวข้อ: ฟอนต์ไทยมีเชิง ให้ความรู้สึกพรีเมียม
+const serif = Noto_Serif_Thai({
+  variable: "--font-serif",
+  subsets: ["thai", "latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -27,7 +36,7 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = { themeColor: "#070912", viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#0a0908", viewportFit: "cover" };
 
 async function unreadCount(userId: number) {
   const db = await getDb();
@@ -45,28 +54,30 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="th">
-      <body className={`${prompt.variable} font-sans`}>
+      <body className={`${prompt.variable} ${serif.variable} font-sans`}>
         <div className="aurora">
           <i />
         </div>
-        <div className="grid-bg" />
         <PwaProvider userId={user?.id ?? null}>
         <CartProvider products={products} rate={st.robuxPerBaht} signedIn={!!user} points={user?.points ?? 0}>
           <Nav user={navUser} vapidKey={vapidPublicKey()} />
           {st.announcement && (
-            <div className="border-b border-line bg-gradient-to-r from-emerald-500/15 via-cyan-500/15 to-violet-500/15 px-4 py-2 text-center text-sm font-medium">
+            <div className="border-b border-line bg-gradient-to-r from-transparent via-amber-200/10 to-transparent px-4 py-2 text-center text-sm text-champagne">
               {st.announcement}
             </div>
           )}
           <main className="overflow-x-clip pb-28 md:pb-12">{children}</main>
-          <footer className="mx-auto hidden max-w-6xl px-4 pb-10 text-center text-xs text-dim md:block">
-            © {new Date().getFullYear()} เหนื่อยใจ · ราคา = Robux ÷ {st.robuxPerBaht} ปัดขึ้น · เติมด้วยซองอั่งเปา TrueMoney หรือพร้อมเพย์{" "}
-            ·{" "}
-            <Link href="/install" className="text-leaf hover:underline">
-              ติดตั้งแอป
-            </Link>
+          <footer className="mx-auto hidden max-w-6xl px-4 pb-12 md:block">
+            <div className="gold-rule mb-6" />
+            <div className="flex items-center justify-between text-xs tracking-wide text-dim">
+              <span>© {new Date().getFullYear()} เหนื่อยใจ</span>
+              <Link href="/install" className="text-gold/80 hover:text-gold">
+                ติดตั้งแอป
+              </Link>
+            </div>
           </footer>
         </CartProvider>
+        {user && <PushBanner />}
         </PwaProvider>
       </body>
     </html>

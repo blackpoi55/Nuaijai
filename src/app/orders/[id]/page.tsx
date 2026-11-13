@@ -33,7 +33,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       </Link>
 
       {isNew && (
-        <div className="relative mb-8 overflow-hidden rounded-[2rem] border border-leaf/25 bg-gradient-to-br from-emerald-500/20 via-cyan-500/10 to-violet-500/20 p-8 text-center">
+        <div className="relative mb-8 overflow-hidden rounded-[2rem] border border-gold/30 bg-gradient-to-b from-amber-200/10 to-transparent p-8 text-center">
           <Confetti />
           <div className="animate-pop mx-auto grid size-16 place-items-center rounded-2xl bg-leaf/20">
             <PartyPopper className="size-8 text-leaf" />

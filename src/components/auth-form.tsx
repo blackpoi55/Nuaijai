@@ -13,10 +13,10 @@ export function AuthForm({ kind, next }: { kind: "login" | "register"; next: str
   return (
     <div className="mx-auto grid min-h-[calc(100dvh-10rem)] max-w-md place-items-center px-4 py-10">
       <div className="glass animate-rise w-full rounded-[2rem] p-7 shadow-2xl sm:p-9">
-        <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-emerald-300 to-violet-400 shadow-lg shadow-emerald-500/30">
-          {reg ? <UserPlus className="size-7 text-ink" /> : <LogIn className="size-7 text-ink" />}
+        <div className="mx-auto mb-5 grid size-14 place-items-center rounded-full border border-gold/40 bg-gold/10">
+          {reg ? <UserPlus className="size-6 text-gold" strokeWidth={1.5} /> : <LogIn className="size-6 text-gold" strokeWidth={1.5} />}
         </div>
-        <h1 className="text-center text-2xl font-extrabold">{reg ? "สมัครสมาชิก" : "ยินดีต้อนรับกลับ"}</h1>
+        <h1 className="text-center text-3xl font-semibold">{reg ? "สมัครสมาชิก" : "ยินดีต้อนรับกลับ"}</h1>
         <p className="mt-1 text-center text-sm text-muted">{reg ? "สมัครฟรี ใช้แค่ชื่อผู้ใช้กับรหัสผ่าน" : "เข้าสู่ระบบเพื่อเติมแต้มและซื้อพาส"}</p>
 
         <form action={action} className="mt-7 space-y-4">
@@ -51,7 +51,7 @@ export function AuthForm({ kind, next }: { kind: "login" | "register"; next: str
 
         <p className="mt-6 text-center text-sm text-muted">
           {reg ? "มีบัญชีแล้ว? " : "ยังไม่มีบัญชี? "}
-          <Link href={`${reg ? "/login" : "/register"}${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`} className="font-semibold text-leaf hover:underline">
+          <Link href={`${reg ? "/login" : "/register"}${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`} className="font-medium text-gold hover:underline">
             {reg ? "เข้าสู่ระบบ" : "สมัครเลย"}
           </Link>
         </p>

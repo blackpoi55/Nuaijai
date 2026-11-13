@@ -46,8 +46,8 @@ function ContactAdmin({ url, strong }: { url: string; strong?: boolean }) {
         <MessageCircle className="size-5" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold">อยากให้ตรวจเร็ว? ทักแอดมินทาง Discord</span>
-        <span className="block text-xs text-muted">ส่งชื่อผู้ใช้บนเว็บกับสลิปให้แอดมินได้เลย</span>
+        <span className="block text-sm font-medium">ตรวจเร็วขึ้น — ทักแอดมิน Discord</span>
+        <span className="block text-xs text-muted">ส่งชื่อผู้ใช้กับสลิป</span>
       </span>
       <ExternalLink className="size-4 shrink-0 text-muted" />
     </a>
@@ -174,7 +174,7 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
           )}
           <span>
             <span className="block font-semibold">{image ? "เปลี่ยนรูปสลิป" : "เลือกรูปสลิป"}</span>
-            <span className="block text-xs text-dim">แคปหน้าจอสลิปจากแอปธนาคาร ให้เห็นยอด เวลา และเลขอ้างอิงชัดๆ</span>
+            <span className="block text-xs text-dim">แคปหน้าจอสลิปให้เห็นยอดชัดๆ</span>
           </span>
         </button>
         {imgErr && <p className="mt-1 text-sm text-danger">{imgErr}</p>}
@@ -182,7 +182,7 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
 
       <button
         disabled={pending || !image || !validAmount}
-        className="btn w-full !py-4 text-base text-white shadow-lg shadow-sky-500/30 [background:linear-gradient(135deg,#38bdf8,#6366f1)]"
+        className="btn btn-primary w-full !py-4 text-base"
       >
         {pending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
         {pending ? "กำลังส่งสลิป..." : "ส่งสลิปให้แอดมินตรวจ"}

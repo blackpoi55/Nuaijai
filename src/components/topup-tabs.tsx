@@ -52,14 +52,18 @@ export function TopupTabs({
       {current === "angpao" ? (
         <div>
           <TopupForm />
-          <ol className="mt-6 space-y-3 text-sm">
+          <details className="group mt-5 text-sm [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted hover:text-fg">
+              วิธีสร้างซองอั่งเปา <span className="text-gold transition group-open:rotate-45">+</span>
+            </summary>
+          <ol className="mt-4 space-y-3">
             {[
               ["เปิดแอป TrueMoney", "เมนู ‘ส่งซองของขวัญ’ หรือ ‘อั่งเปา’"],
               ["ใส่จำนวนเงิน แบ่งให้ 1 คน", "ถ้าแบ่งหลายคน ร้านจะได้แค่ส่วนเดียว"],
               ["คัดลอกลิงก์ซองมาวางด้านบน", "ลิงก์แบบ gift.truemoney.com/campaign/?v=... แต้มเข้าทันที"],
             ].map(([t, d], i) => (
               <li key={t} className="flex gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-orange-400 to-rose-500 text-xs font-black text-white">{i + 1}</span>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full border border-gold/40 font-display text-xs text-gold">{i + 1}</span>
                 <span>
                   <span className="block font-semibold">{t}</span>
                   <span className="block text-muted">{d}</span>
@@ -67,6 +71,7 @@ export function TopupTabs({
               </li>
             ))}
           </ol>
+          </details>
         </div>
       ) : (
         <PromptPayForm promptpayId={promptpayId} contactUrl={contactUrl} />

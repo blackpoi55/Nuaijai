@@ -31,7 +31,7 @@ export function AdminNav({ pendingSlips = 0 }: { pendingSlips?: number }) {
             href={i.href}
             className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${on(i.href) ? "bg-white/10 text-fg" : "text-muted hover:bg-white/5 hover:text-fg"}`}
           >
-            <i.icon className={`size-4 ${on(i.href) ? "text-leaf" : ""}`} /> {i.label}
+            <i.icon className={`size-4 ${on(i.href) ? "text-gold" : ""}`} /> {i.label}
             {i.href === "/admin/slips" && pendingSlips > 0 && (
               <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-rose px-1.5 text-[11px] font-bold text-white">{pendingSlips}</span>
             )}

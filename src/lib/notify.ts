@@ -6,7 +6,8 @@ import { getDb, schema } from "@/db";
 // แจ้งเตือน = แถวในตาราง notifications (กระดิ่งในเว็บ) + Web Push ไปทุกเครื่องที่คนนั้นเปิดรับไว้
 // ไม่ throw: ถ้าส่งไม่ได้ งานหลัก (อนุมัติสลิป ซื้อของ ฯลฯ) ต้องสำเร็จอยู่ดี
 
-export type Note = { title: string; body?: string; url?: string; tag?: string };
+// important = ค้างบนจอจนกว่าจะกด + สั่นแรง (ใช้กับแจ้งเตือนของแอดมิน) • action = ข้อความปุ่มในแจ้งเตือน
+export type Note = { title: string; body?: string; url?: string; tag?: string; important?: boolean; action?: string };
 
 let vapidReady: boolean | null = null;
 export function pushEnabled() {
@@ -34,7 +35,15 @@ async function pushTo(userIds: number[], n: Note) {
   if (!pushEnabled() || userIds.length === 0) return;
   const db = await getDb();
   const subs = await db.select().from(schema.pushSubscriptions).where(inArray(schema.pushSubscriptions.userId, userIds));
-  const payload = JSON.stringify({ title: n.title, body: n.body ?? "", url: n.url ?? "/", tag: n.tag });
+  const payload = JSON.stringify({
+    title: n.title,
+    body: n.body ?? "",
+    url: n.url ?? "/",
+    tag: n.tag,
+    image: "/icons/banner.jpg", // Android: รูปใหญ่ตอนดึงแจ้งเตือนลง
+    important: !!n.important,
+    action: n.action ?? "เปิดดู",
+  });
   const dead: number[] = [];
   await Promise.all(
     subs.map(async (s) => {
@@ -72,7 +81,7 @@ export async function notifyAdmins(n: Note) {
     const admins = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.role, "admin"));
     await notifyUsers(
       admins.map((a) => a.id),
-      n,
+      { important: true, ...n },
     );
   } catch (e) {
     console.error("notifyAdmins failed", e);

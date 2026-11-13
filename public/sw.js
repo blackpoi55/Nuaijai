@@ -10,21 +10,29 @@ self.addEventListener("push", (event) => {
     data = { title: "เหนื่อยใจ", body: event.data ? event.data.text() : "" };
   }
   const title = data.title || "เหนื่อยใจ";
-  const options = {
-    body: data.body || "",
-    icon: "/icons/192.png",
-    badge: "/icons/badge-96.png",
-    tag: data.tag || undefined,
-    renotify: !!data.tag,
-    data: { url: data.url || "/" },
-    vibrate: [80, 40, 80],
-  };
+  const url = data.url || "/";
+
   event.waitUntil(
     (async () => {
-      await self.registration.showNotification(title, options);
-      // บอกหน้าเว็บที่เปิดอยู่ให้รีเฟรชกระดิ่ง
       const tabs = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      tabs.forEach((c) => c.postMessage({ type: "nh-notify" }));
+      // เปิดแอปค้างอยู่บนจอ → ให้แอปแสดงแบนเนอร์ใหญ่เอง (เด่นกว่ากล่องแจ้งเตือนของระบบ)
+      const visible = tabs.find((c) => c.visibilityState === "visible" && c.focused);
+      tabs.forEach((c) => c.postMessage({ type: "nh-notify", show: !!visible && c === visible, note: { title, body: data.body || "", url, important: !!data.important, action: data.action } }));
+      if (visible) return;
+
+      await self.registration.showNotification(title, {
+        body: data.body || "",
+        icon: "/icons/192.png",
+        badge: "/icons/badge-96.png",
+        image: data.image || undefined, // Android: รูปแบนเนอร์ใหญ่
+        tag: data.tag || undefined,
+        renotify: !!data.tag,
+        requireInteraction: !!data.important, // แจ้งเตือนแอดมินค้างจนกว่าจะกด
+        vibrate: data.important ? [300, 120, 300, 120, 500] : [150, 80, 150],
+        actions: [{ action: "open", title: data.action || "เปิดดู" }],
+        data: { url },
+        timestamp: Date.now(),
+      });
     })(),
   );
 });

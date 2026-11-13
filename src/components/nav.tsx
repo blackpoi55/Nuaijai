@@ -97,7 +97,7 @@ function MobileBar({ active }: { active: (h: string) => boolean }) {
           href={l.href}
           className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-semibold transition ${active(l.href) ? "bg-white/10 text-fg" : "text-muted"}`}
         >
-          <l.icon className={`size-5 ${active(l.href) ? "text-leaf" : ""}`} />
+          <l.icon className={`size-5 ${active(l.href) ? "text-gold" : ""}`} />
           {l.label}
         </Link>
       ))}
@@ -121,7 +121,7 @@ function UserMenu({ user }: { user: NonNullable<NavUser> }) {
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((v) => !v)} className="btn btn-ghost !px-2.5 !py-2" aria-label="เมนูบัญชี">
-        <span className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-violet-400 to-pink-400 text-sm font-bold text-ink">
+        <span className="grid size-7 place-items-center rounded-full border border-gold/40 bg-gold/10 text-sm font-semibold text-gold">
           {user.name.slice(0, 1).toUpperCase()}
         </span>
         <ChevronDown className={`hidden size-4 transition sm:block ${open ? "rotate-180" : ""}`} />

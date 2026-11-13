@@ -22,7 +22,7 @@ export function CouponBox() {
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <TicketPercent className="size-5 text-grape" /> กรอกคูปอง
       </h2>
-      <p className="mt-1 text-sm text-muted">คูปองแต้มฟรีจากแอดมิน • คูปองส่วนลดให้กรอกในตะกร้าตอนซื้อ</p>
+      <p className="mt-1 text-xs text-dim">คูปองส่วนลด กรอกในตะกร้า</p>
       <form action={action} className="mt-4 flex gap-2">
         <input
           ref={ref}
@@ -33,7 +33,7 @@ export function CouponBox() {
           onChange={(e) => (e.target.value = e.target.value.toUpperCase())}
           className="input !py-3 font-mono uppercase tracking-wider"
         />
-        <button disabled={pending} className="btn shrink-0 text-white [background:linear-gradient(135deg,#a78bfa,#f472b6)]">
+        <button disabled={pending} className="btn btn-primary shrink-0">
           {pending ? "..." : "ใช้คูปอง"}
         </button>
       </form>

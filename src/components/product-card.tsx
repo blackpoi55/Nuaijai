@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock, Crown, Info, X } from "lucide-react";
+import { CheckCircle2, Plus, X } from "lucide-react";
 import type { PublicProduct } from "@/lib/products";
 import { formatNumber, itemBaht } from "@/lib/pricing";
 import { AddToCartButton, useCart } from "./cart";
@@ -15,7 +15,7 @@ export function daysLeft(iso: string | null) {
 }
 
 export function ProductCard({ p, index = 0 }: { p: PublicProduct; index?: number }) {
-  const { rate, qty } = useCart();
+  const { rate, qty, add } = useCart();
   const [open, setOpen] = useState(false);
   const left = daysLeft(p.saleEnd);
   const inCart = qty[p.id] ?? 0;
@@ -23,51 +23,39 @@ export function ProductCard({ p, index = 0 }: { p: PublicProduct; index?: number
   return (
     <>
       <article
-        className="pass-card glass animate-rise flex flex-col rounded-3xl p-5 transition-transform duration-300"
-        style={{ ["--c" as string]: p.color, animationDelay: `${index * 60}ms` }}
+        onClick={() => setOpen(true)}
+        className="pass-card glass animate-rise group flex cursor-pointer flex-col rounded-[1.75rem] p-2.5 transition-transform duration-500 sm:p-3"
+        style={{ ["--c" as string]: p.color, animationDelay: `${index * 50}ms` }}
       >
         <div className="glow" />
-        <div className="flex items-start justify-between gap-3">
-          <PassIcon src={p.iconUrl} name={p.name} color={p.color} className="size-24 rounded-2xl shadow-xl ring-1 ring-white/10" />
-          <div className="flex flex-col items-end gap-1.5">
-            {p.featured && (
-              <span className="chip border-amber-300/30 bg-amber-300/15 text-gold">
-                <Crown className="size-3.5" /> ขายดี
-              </span>
-            )}
-            {left !== null && (
-              <span className="chip border-rose/30 bg-rose/15 text-rose">
-                <Clock className="size-3.5" /> เหลือ {left} วัน
-              </span>
-            )}
-            {p.kind === "item" && <span className="chip border-aqua/30 bg-aqua/10 text-aqua">ซื้อซ้ำได้</span>}
-            {inCart > 0 && <span className="chip border-leaf/30 bg-leaf/15 text-leaf">ในตะกร้า {inCart}</span>}
-          </div>
+        <div className="relative overflow-hidden rounded-[1.35rem]">
+          <PassIcon src={p.iconUrl} name={p.name} color={p.color} className="aspect-square w-full transition-transform duration-700 group-hover:scale-[1.04]" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent" />
+          {left !== null && (
+            <span className="absolute left-2.5 top-2.5 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-champagne backdrop-blur">เหลือ {left} วัน</span>
+          )}
+          {inCart > 0 && (
+            <span className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full bg-gold text-[11px] font-bold text-ink">{inCart}</span>
+          )}
         </div>
-
-        <h3 className="mt-4 text-xl font-bold">{p.name}</h3>
-        <p className="mt-1 line-clamp-2 min-h-10 text-sm text-muted">{p.blurb}</p>
-
-        <ul className="mt-4 space-y-1.5 text-sm">
-          {p.perks.slice(0, 3).map((k) => (
-            <li key={k.t} className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 size-4 shrink-0" style={{ color: p.color }} />
-              <span className="line-clamp-1">{k.t}</span>
-            </li>
-          ))}
-        </ul>
-        <button onClick={() => setOpen(true)} className="mt-2 flex items-center gap-1 self-start text-xs font-semibold text-muted hover:text-fg">
-          <Info className="size-3.5" /> ดูสิทธิ์ทั้งหมด {p.perks.length > 3 ? `(+${p.perks.length - 3})` : ""}
-        </button>
-
-        <div className="mt-auto flex items-end justify-between gap-3 pt-5">
-          <div>
-            <p className="text-xs text-dim line-through decoration-white/30">{formatNumber(p.priceRobux)} R$</p>
-            <p className="text-2xl font-extrabold">
-              ฿{formatNumber(itemBaht(p.priceRobux, rate))}
-            </p>
+        <div className="flex flex-1 flex-col px-1.5 pb-1 pt-3.5">
+          <h3 className="line-clamp-1 text-base font-medium sm:text-lg">{p.name}</h3>
+          <div className="mt-auto flex items-end justify-between gap-2 pt-2">
+            <div className="leading-tight">
+              <p className="text-[11px] text-dim">{formatNumber(p.priceRobux)} R$</p>
+              <p className="font-display text-xl font-semibold text-gold sm:text-2xl">฿{formatNumber(itemBaht(p.priceRobux, rate))}</p>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                add(p.id);
+              }}
+              aria-label={`ใส่ ${p.name} ลงตะกร้า`}
+              className="btn btn-primary !size-10 shrink-0 !p-0"
+            >
+              <Plus className="size-5" />
+            </button>
           </div>
-          <AddToCartButton id={p.id} />
         </div>
       </article>
       {open && <PerksModal p={p} onClose={() => setOpen(false)} />}
@@ -97,30 +85,35 @@ export function PerksModal({ p, onClose }: { p: PublicProduct; onClose: () => vo
         <button onClick={onClose} className="btn btn-ghost absolute right-4 top-4 z-10 !p-2" aria-label="ปิด">
           <X className="size-5" />
         </button>
-        <div className="scrollbar-thin max-h-[88dvh] overflow-y-auto p-6">
-          <div className="flex items-center gap-4">
-            <PassIcon src={p.iconUrl} name={p.name} color={p.color} className="size-20 rounded-2xl ring-1 ring-white/10" />
-            <div>
-              <h3 className="text-2xl font-extrabold">{p.name}</h3>
-              <p className="text-sm text-muted">{p.blurb}</p>
+        <div className="scrollbar-thin max-h-[88dvh] overflow-y-auto">
+          <div className="relative">
+            <PassIcon src={p.iconUrl} name={p.name} color={p.color} className="aspect-[16/10] w-full [&>img]:object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-2 via-ink-2/30 to-transparent" />
+            <div className="absolute inset-x-6 bottom-4">
+              <h3 className="text-3xl font-semibold">{p.name}</h3>
+              {p.blurb && <p className="mt-1 text-sm text-muted">{p.blurb}</p>}
             </div>
           </div>
-          <ul className="mt-6 space-y-3">
-            {p.perks.map((k) => (
-              <li key={k.t} className="rounded-2xl bg-white/[0.04] p-3.5">
-                <p className="flex items-center gap-2 font-semibold">
-                  <CheckCircle2 className="size-4 shrink-0" style={{ color: p.color }} /> {k.t}
-                </p>
-                <p className="mt-1 pl-6 text-sm text-muted">{k.d}</p>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-dim">{formatNumber(p.priceRobux)} R$</p>
-              <p className="text-2xl font-extrabold">฿{formatNumber(itemBaht(p.priceRobux, rate))}</p>
+          <div className="px-6 pb-6">
+            <div className="gold-rule my-4" />
+            <ul className="space-y-3.5">
+              {p.perks.map((k) => (
+                <li key={k.t} className="flex gap-3">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-gold" strokeWidth={1.75} />
+                  <div>
+                    <p className="font-medium">{k.t}</p>
+                    {k.d && <p className="mt-0.5 text-sm text-dim">{k.d}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-7 flex items-center justify-between gap-3">
+              <div className="leading-tight">
+                <p className="text-xs text-dim">{formatNumber(p.priceRobux)} R$</p>
+                <p className="font-display text-3xl font-semibold text-gold">฿{formatNumber(itemBaht(p.priceRobux, rate))}</p>
+              </div>
+              <AddToCartButton id={p.id} className="!px-7 !py-3" />
             </div>
-            <AddToCartButton id={p.id} className="!px-6 !py-3" />
           </div>
         </div>
       </div>

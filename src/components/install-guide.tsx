@@ -173,7 +173,7 @@ export function InstallGuide({ initial }: { initial?: OS }) {
       <ol className="mt-6 space-y-3">
         {g.steps.map((s, i) => (
           <li key={i} className="glass animate-rise flex gap-4 rounded-2xl p-4" style={{ animationDelay: `${i * 60}ms` }}>
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-400 text-sm font-black text-ink">{s.icon ?? i + 1}</span>
+            <span className="grid size-9 shrink-0 place-items-center rounded-full border border-gold/40 font-display text-sm text-gold">{s.icon ?? i + 1}</span>
             <div className="min-w-0 pt-1">
               <p className="font-semibold leading-relaxed">{s.title}</p>
               {s.detail && <p className="mt-1 text-sm text-muted">{s.detail}</p>}

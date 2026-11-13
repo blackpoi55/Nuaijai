@@ -62,7 +62,7 @@ export function CodeTicket({ c, colors }: { c: Code; colors: Record<string, stri
             rel="noreferrer"
             className="flex items-center gap-3 rounded-xl bg-black/25 px-3 py-2.5 transition hover:bg-black/35"
           >
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-400/30 to-cyan-400/20 text-sm font-bold text-leaf">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full border border-gold/30 bg-gold/10 text-sm font-semibold text-gold">
               {(c.usedByDisplayName || c.usedByName || "?").slice(0, 1).toUpperCase()}
             </span>
             <span className="min-w-0 flex-1 text-sm">

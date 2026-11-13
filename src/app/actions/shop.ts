@@ -143,7 +143,7 @@ export async function submitSlipAction(_: SlipState, form: FormData): Promise<Sl
   const isTest = user.role === "admin"; // สลิปของแอดมิน = เทส ไม่นับรายได้
   await db.insert(schema.slips).values({ userId: user.id, amount, imageData: image, imageHash, isTest });
   revalidatePath("/topup");
-  if (!isTest) after(() => notifyAdmins({ title: `🧾 สลิปพร้อมเพย์รอตรวจ ฿${formatBaht(amount)}`, body: `จาก ${user.displayName} • กดเพื่อตรวจ`, url: "/admin/slips", tag: "slip" }));
+  if (!isTest) after(() => notifyAdmins({ title: `🧾 สลิปพร้อมเพย์รอตรวจ ฿${formatBaht(amount)}`, body: `จาก ${user.displayName} • กดเพื่อตรวจ`, url: "/admin/slips", tag: "slip", action: "ตรวจสลิป" }));
   return { ok: true, message: `ส่งสลิป ฿${formatBaht(amount)} แล้ว รอแอดมินตรวจ แต้มจะเข้าหลังอนุมัติ` };
 }
 

@@ -24,6 +24,9 @@ const bg = await sharp(buf).resize(512, 512).blur(24).modulate({ brightness: 0.8
 const fg = await sharp(buf).resize(410, 410).png().toBuffer();
 await sharp(bg).composite([{ input: fg, gravity: "center" }]).png({ compressionLevel: 9, palette: true, quality: 90 }).toFile("public/icons/maskable-512.png");
 
+// แบนเนอร์ใหญ่ในแจ้งเตือน Android (2:1, เน้นส่วนบนที่มีชื่อแมพ)
+await sharp(buf).resize(1024, 512, { fit: "cover", position: "top" }).jpeg({ quality: 80, mozjpeg: true }).toFile("public/icons/banner.jpg");
+
 // badge แจ้งเตือน Android: รูปขาวล้วนบนพื้นใส (ใบไม้)
 const leaf = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="-3 -3 30 30" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`;
 await sharp(Buffer.from(leaf)).png().toFile("public/icons/badge-96.png");
