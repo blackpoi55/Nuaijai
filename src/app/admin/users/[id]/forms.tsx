@@ -1,19 +1,41 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { adjustPointsAction, resetPasswordAction, setUserFlagsAction } from "@/app/actions/admin";
+
+const MODES = [
+  { id: "add", label: "เติมแต้ม", hint: "แจกหรือเติมให้ เช่น เติมแทนลูกค้า ของรางวัล", btn: "btn-primary" },
+  { id: "refund", label: "คืนแต้ม", hint: "คืนให้ลูกค้า เช่น ซื้อผิด ระบบมีปัญหา", btn: "btn-gold" },
+  { id: "deduct", label: "หักแต้ม", hint: "หักออก เช่น เติมผิด สลิปปลอม", btn: "border border-danger/40 bg-danger/15 text-danger" },
+] as const;
 
 export function AdjustForm({ userId }: { userId: number }) {
   const [state, action, pending] = useActionState(adjustPointsAction, undefined);
+  const [mode, setMode] = useState<(typeof MODES)[number]["id"]>("add");
+  const m = MODES.find((x) => x.id === mode)!;
   return (
     <form action={action} className="glass space-y-3 rounded-2xl p-5">
-      <h3 className="font-bold">ปรับแต้ม</h3>
+      <h3 className="font-bold">เติม / คืน / หักแต้ม</h3>
       <input type="hidden" name="userId" value={userId} />
-      <input name="amount" required inputMode="decimal" placeholder="จำนวน เช่น 50 หรือ -20" className="input" />
-      <input name="note" required placeholder="เหตุผล (ลูกค้าเห็น)" className="input" />
+      <input type="hidden" name="mode" value={mode} />
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/30 p-1 text-sm">
+        {MODES.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            onClick={() => setMode(x.id)}
+            className={`rounded-lg py-2 font-semibold transition ${mode === x.id ? "bg-white/10 text-fg" : "text-muted hover:text-fg"}`}
+          >
+            {x.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-dim">{m.hint}</p>
+      <input name="amount" required inputMode="decimal" placeholder="จำนวนแต้ม เช่น 50" className="input" />
+      <input name="note" placeholder="เหตุผล (ลูกค้าเห็นในประวัติแต้ม)" className="input" />
       <Msg s={state} />
-      <button disabled={pending} className="btn btn-primary !py-2 text-sm">
-        บันทึก
+      <button disabled={pending} className={`btn ${m.btn} !py-2 text-sm`}>
+        {pending ? "กำลังบันทึก..." : `ยืนยัน${m.label}`}
       </button>
     </form>
   );

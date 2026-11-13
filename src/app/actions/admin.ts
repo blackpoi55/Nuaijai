@@ -36,13 +36,14 @@ export async function saveProductAction(_: AdminState, f: FormData): Promise<Adm
   const robloxProductId = int(f, "robloxProductId");
   const iconRaw = str(f, "iconAssetId");
   const saleEndRaw = str(f, "saleEnd");
-  if (!/^[a-z0-9_]{2,40}$/.test(passKey)) return { error: "รหัสพาสในเกม ต้องเป็น a-z 0-9 _ (ต้องตรงกับ id ใน Config.Passes)" };
+  if (!/^[a-z0-9_]{2,40}$/.test(passKey)) return { error: "รหัสในเกม ต้องเป็น a-z 0-9 _ (ต้องตรงกับ id ใน Config.Passes)" };
   if (!name) return { error: "ใส่ชื่อสินค้า" };
   if (!(priceRobux > 0)) return { error: "ราคา Robux ต้องมากกว่า 0" };
   if (!(robloxProductId > 0)) return { error: "ใส่ Developer Product ID" };
   const color = /^#[0-9a-fA-F]{6}$/.test(str(f, "color")) ? str(f, "color") : "#7C5CFF";
   const values = {
     passKey,
+    kind: f.get("kind") === "item" ? ("item" as const) : ("pass" as const),
     name,
     priceRobux,
     robloxProductId,
@@ -102,25 +103,35 @@ export async function fetchRobloxProductAction(productId: number): Promise<{ ok:
 export async function adjustPointsAction(_: AdminState, f: FormData): Promise<AdminState> {
   const admin = await requireAdmin();
   const userId = int(f, "userId");
-  const baht = Number(f.get("amount"));
-  const note = str(f, "note");
-  if (!Number.isFinite(baht) || baht === 0) return { error: "ใส่จำนวนแต้ม (ติดลบ = หัก)" };
-  if (!note) return { error: "ใส่เหตุผล" };
-  const delta = Math.round(baht * 100);
+  // add = เติมแต้มให้ • refund = คืนแต้ม • deduct = หักแต้ม (ยอดใส่เป็นบวกเสมอ)
+  const mode = ["add", "refund", "deduct"].includes(str(f, "mode")) ? str(f, "mode") : "add";
+  const baht = Math.abs(Number(f.get("amount")));
+  const reason = str(f, "note");
+  if (!Number.isFinite(baht) || baht === 0 || baht > 100000) return { error: "ใส่จำนวนแต้ม" };
+  const label = { add: "แอดมินเติมแต้มให้", refund: "คืนแต้ม", deduct: "แอดมินหักแต้ม" }[mode as "add" | "refund" | "deduct"];
+  const note = reason ? `${label}: ${reason}` : label;
+  const delta = Math.round(baht * 100) * (mode === "deduct" ? -1 : 1);
   const db = await getDb();
-  const ok = await db.transaction(async (tx) => {
+  const balance = await db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.users)
       .set({ points: sql`${schema.users.points} + ${delta}` })
       .where(and(eq(schema.users.id, userId), sql`${schema.users.points} + ${delta} >= 0`))
       .returning({ points: schema.users.points });
-    if (!u) return false;
-    await tx.insert(schema.pointLedger).values({ userId, delta, balanceAfter: u.points, kind: "admin", note, adminId: admin.id });
-    return true;
+    if (!u) return null;
+    await tx.insert(schema.pointLedger).values({
+      userId,
+      delta,
+      balanceAfter: u.points,
+      kind: mode === "refund" ? "refund" : "admin",
+      note,
+      adminId: admin.id,
+    });
+    return u.points;
   });
-  if (!ok) return { error: "หักแต้มเกินที่มีไม่ได้" };
-  revalidatePath(`/admin/users/${userId}`);
-  return { ok: "ปรับแต้มแล้ว" };
+  if (balance === null) return { error: "หักแต้มเกินที่มีไม่ได้" };
+  revalidatePath("/admin", "layout");
+  return { ok: `${label} ${baht.toLocaleString("th-TH")} แต้มแล้ว • คงเหลือ ${(balance / 100).toLocaleString("th-TH")}` };
 }
 
 export async function resetPasswordAction(_: AdminState, f: FormData): Promise<AdminState> {
@@ -207,6 +218,48 @@ export async function resolveTopupAction(_: AdminState, f: FormData): Promise<Ad
   return ok ? { ok: "เติมแต้มให้แล้ว" } : { error: "ซองนี้สำเร็จไปแล้ว" };
 }
 
+// ---------------------------------------------------------------- สลิปพร้อมเพย์
+
+export async function approveSlipAction(_: AdminState, f: FormData): Promise<AdminState> {
+  const admin = await requireAdmin();
+  const id = int(f, "id");
+  const baht = Number(f.get("amount"));
+  if (!(baht > 0) || baht > 100000) return { error: "ใส่ยอดที่ได้รับจริง" };
+  const amount = Math.round(baht * 100);
+  const db = await getDb();
+  const ok = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .update(schema.slips)
+      .set({ status: "approved", amount, adminId: admin.id, reviewedAt: new Date(), note: null })
+      .where(and(eq(schema.slips.id, id), eq(schema.slips.status, "pending")))
+      .returning({ userId: schema.slips.userId });
+    if (!s) return false;
+    const [u] = await tx
+      .update(schema.users)
+      .set({ points: sql`${schema.users.points} + ${amount}` })
+      .where(eq(schema.users.id, s.userId))
+      .returning({ points: schema.users.points });
+    await tx.insert(schema.pointLedger).values({ userId: s.userId, delta: amount, balanceAfter: u.points, kind: "topup", note: "พร้อมเพย์ (สลิป)", refId: id, adminId: admin.id });
+    return true;
+  });
+  revalidatePath("/admin", "layout");
+  return ok ? { ok: "อนุมัติแล้ว แต้มเข้าแล้ว" } : { error: "สลิปนี้ถูกตรวจไปแล้ว" };
+}
+
+export async function rejectSlipAction(_: AdminState, f: FormData): Promise<AdminState> {
+  const admin = await requireAdmin();
+  const id = int(f, "id");
+  const note = str(f, "note").slice(0, 200) || "สลิปไม่ถูกต้อง";
+  const db = await getDb();
+  const [s] = await db
+    .update(schema.slips)
+    .set({ status: "rejected", note, adminId: admin.id, reviewedAt: new Date() })
+    .where(and(eq(schema.slips.id, id), eq(schema.slips.status, "pending")))
+    .returning({ id: schema.slips.id });
+  revalidatePath("/admin", "layout");
+  return s ? { ok: "ปฏิเสธแล้ว" } : { error: "สลิปนี้ถูกตรวจไปแล้ว" };
+}
+
 // ---------------------------------------------------------------- ตั้งค่า
 
 export async function saveSettingsAction(_: AdminState, f: FormData): Promise<AdminState> {
@@ -216,8 +269,10 @@ export async function saveSettingsAction(_: AdminState, f: FormData): Promise<Ad
   await saveSettings({
     robuxPerBaht: rate,
     shopOpen: f.get("shopOpen") === "on",
-    topupOpen: f.get("topupOpen") === "on",
+    angpaoOpen: f.get("angpaoOpen") === "on",
+    promptpayOpen: f.get("promptpayOpen") === "on",
     announcement: str(f, "announcement").slice(0, 300),
+    contactUrl: /^https:\/\//.test(str(f, "contactUrl")) ? str(f, "contactUrl").slice(0, 300) : "",
   });
   revalidatePath("/", "layout");
   return { ok: "บันทึกแล้ว" };

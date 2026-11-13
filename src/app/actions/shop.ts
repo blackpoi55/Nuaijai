@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { and, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb, schema } from "@/db";
@@ -22,7 +23,7 @@ export async function topupAction(_: TopupState, form: FormData): Promise<TopupS
   const user = await getCurrentUser();
   if (!user) return { ok: false, message: "กรุณาเข้าสู่ระบบก่อน" };
   const st = await getSettings();
-  if (!st.topupOpen) return { ok: false, message: "ปิดรับเติมแต้มชั่วคราว" };
+  if (!st.angpaoOpen) return { ok: false, message: "ปิดรับเติมด้วยซองอั่งเปาชั่วคราว" };
 
   const hash = parseVoucher(String(form.get("voucher") ?? ""));
   if (!hash) return { ok: false, message: "ลิงก์ซองไม่ถูกต้อง ต้องเป็นลิงก์ gift.truemoney.com/campaign/?v=..." };
@@ -97,6 +98,46 @@ export async function topupAction(_: TopupState, form: FormData): Promise<TopupS
   return { ok: true, amount: r.amount, balance, message: `เติมสำเร็จ +${formatBaht(r.amount)} แต้ม` };
 }
 
+// ---------------------------------------------------------------- เติมด้วยพร้อมเพย์ + แนบสลิป (แอดมินตรวจ)
+
+export type SlipState = { ok: boolean; message: string } | undefined;
+
+const MAX_SLIP_CHARS = 2_500_000; // data URL หลังย่อแล้ว (~1.8MB)
+
+export async function submitSlipAction(_: SlipState, form: FormData): Promise<SlipState> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, message: "กรุณาเข้าสู่ระบบก่อน" };
+  const st = await getSettings();
+  if (!st.promptpayOpen) return { ok: false, message: "ปิดรับเติมด้วยพร้อมเพย์ชั่วคราว" };
+
+  const baht = Number(form.get("amount"));
+  if (!Number.isFinite(baht) || baht < 1 || baht > 50000) return { ok: false, message: "ยอดโอนต้องอยู่ระหว่าง 1–50,000 บาท" };
+  const amount = Math.round(baht * 100);
+
+  const image = String(form.get("image") ?? "");
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) return { ok: false, message: "แนบรูปสลิปก่อนส่ง" };
+  if (image.length > MAX_SLIP_CHARS) return { ok: false, message: "รูปใหญ่เกินไป ลองแคปหน้าจอสลิปใหม่" };
+
+  const db = await getDb();
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.slips)
+    .where(and(eq(schema.slips.userId, user.id), eq(schema.slips.status, "pending")));
+  if (n >= 3) return { ok: false, message: "มีสลิปรอตรวจ 3 ใบแล้ว รอแอดมินตรวจก่อนนะ" };
+
+  const imageHash = createHash("sha256").update(image.slice(image.indexOf(",") + 1)).digest("hex");
+  const [dup] = await db
+    .select({ id: schema.slips.id, status: schema.slips.status })
+    .from(schema.slips)
+    .where(and(eq(schema.slips.imageHash, imageHash), sql`${schema.slips.status} <> 'rejected'`))
+    .limit(1);
+  if (dup) return { ok: false, message: "สลิปนี้ถูกส่งเข้าระบบแล้ว" };
+
+  await db.insert(schema.slips).values({ userId: user.id, amount, imageData: image, imageHash });
+  revalidatePath("/topup");
+  return { ok: true, message: `ส่งสลิป ฿${formatBaht(amount)} แล้ว รอแอดมินตรวจ แต้มจะเข้าหลังอนุมัติ` };
+}
+
 // ---------------------------------------------------------------- ซื้อของในตะกร้า
 
 export type CheckoutInput = { items: { id: number; qty: number }[]; mode: "single" | "split" };
@@ -127,9 +168,9 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
   for (const [id, q] of qty) {
     const p = prods.find((x) => x.id === id);
     if (!p || !isOnSale(p, now)) return { ok: false, message: "มีของบางชิ้นในตะกร้าหมดเวลาขายแล้ว ลองรีเฟรชหน้า" };
-    items.push({ productId: p.id, passKey: p.passKey, name: p.name, priceRobux: p.priceRobux, qty: q });
+    items.push({ productId: p.id, passKey: p.passKey, kind: p.kind, name: p.name, priceRobux: p.priceRobux, qty: q });
   }
-  if (mode === "single" && items.some((i) => i.qty > 1)) {
+  if (mode === "single" && items.some((i) => i.kind === "pass" && i.qty > 1)) {
     return { ok: false, message: "โค้ดรวมใส่พาสเดียวกันซ้ำไม่ได้ (คนหนึ่งมีพาสได้ชิ้นเดียว) — เลือก ‘แยกโค้ดทีละชิ้น’" };
   }
 
@@ -140,7 +181,13 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
   // โค้ดที่จะออก
   const bundles: { passKeys: string[]; label: string }[] =
     mode === "single"
-      ? [{ passKeys: items.map((i) => i.passKey), label: items.map((i) => i.name).join(" + ") }]
+      ? [
+          {
+            // กล่อง/ตั๋วที่ซื้อหลายชิ้น ใส่ id ซ้ำตามจำนวนในโค้ดเดียว
+            passKeys: items.flatMap((i) => Array.from({ length: i.qty }, () => i.passKey)),
+            label: items.map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(" + "),
+          },
+        ]
       : items.flatMap((i) => Array.from({ length: i.qty }, () => ({ passKeys: [i.passKey], label: i.name })));
 
   try {

@@ -40,6 +40,7 @@ export function ProductCard({ p, index = 0 }: { p: PublicProduct; index?: number
                 <Clock className="size-3.5" /> เหลือ {left} วัน
               </span>
             )}
+            {p.kind === "item" && <span className="chip border-aqua/30 bg-aqua/10 text-aqua">ซื้อซ้ำได้</span>}
             {inCart > 0 && <span className="chip border-leaf/30 bg-leaf/15 text-leaf">ในตะกร้า {inCart}</span>}
           </div>
         </div>

@@ -8,6 +8,7 @@ import { fetchRobloxProductAction, saveProductAction } from "@/app/actions/admin
 type Initial = {
   id: number;
   passKey: string;
+  kind: "pass" | "item";
   robloxProductId: string;
   name: string;
   blurb: string;
@@ -64,8 +65,14 @@ export function ProductForm({ initial }: { initial: Initial }) {
           </div>
           {fetchMsg && <p className="mt-1 text-xs text-muted">{fetchMsg}</p>}
         </L>
-        <L label="รหัสพาสในเกม" hint="id ใน Config.Passes เช่น vip, paylord">
+        <L label="รหัสในเกม" hint="พาส: vip, paylord • กล่อง: box_bubble • กาชา: gacha_x10">
           <input name="passKey" defaultValue={initial?.passKey} required pattern="[a-z0-9_]{2,40}" className="input font-mono" />
+        </L>
+        <L label="ประเภท" hint="พาส = มีได้ชิ้นเดียวต่อคน • ไอเทม = กล่อง บัตร ตั๋ว ซื้อซ้ำได้">
+          <select name="kind" defaultValue={initial?.kind ?? "pass"} className="input">
+            <option value="pass">พาส</option>
+            <option value="item">ไอเทม (ซื้อซ้ำได้)</option>
+          </select>
         </L>
         <L label="ชื่อสินค้า">
           <input name="name" defaultValue={initial?.name} required className="input" />

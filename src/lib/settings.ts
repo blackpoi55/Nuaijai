@@ -5,15 +5,19 @@ import { DEFAULT_ROBUX_PER_BAHT } from "./pricing";
 export type ShopSettings = {
   robuxPerBaht: number;
   shopOpen: boolean;
-  topupOpen: boolean;
+  angpaoOpen: boolean; // เติมด้วยซองอั่งเปา TrueMoney
+  promptpayOpen: boolean; // เติมด้วยพร้อมเพย์ + แนบสลิป
   announcement: string;
+  contactUrl: string; // ลิงก์ทักแอดมิน (Discord) ให้ตรวจสลิปเร็ว
 };
 
 const DEFAULTS: ShopSettings = {
   robuxPerBaht: DEFAULT_ROBUX_PER_BAHT,
   shopOpen: true,
-  topupOpen: true,
+  angpaoOpen: true,
+  promptpayOpen: true,
   announcement: "",
+  contactUrl: "https://discord.com/users/335392827938832384",
 };
 
 export async function getSettings(): Promise<ShopSettings> {
@@ -35,4 +39,9 @@ export async function saveSettings(patch: Partial<ShopSettings>) {
       .values({ key, value: value as never })
       .onConflictDoUpdate({ target: schema.settings.key, set: { value: value as never, updatedAt: new Date() } });
   }
+}
+
+/** เบอร์/เลขพร้อมเพย์ (ค่าเริ่มต้น = เบอร์เดียวกับวอลเล็ต) */
+export function promptPayId() {
+  return (process.env.PROMPTPAY_ID || process.env.TRUEMONEY_PHONE || "").replace(/\D/g, "");
 }

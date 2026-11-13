@@ -40,7 +40,7 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
         {ledger.map((l) => (
           <tr key={l.id}>
             <td className="text-xs text-muted">{thaiDate.format(l.createdAt)}</td>
-            <td>{l.kind}</td>
+            <td>{({ topup: "เติม", purchase: "ซื้อ", admin: "แอดมิน", refund: "คืนแต้ม" } as Record<string, string>)[l.kind] ?? l.kind}</td>
             <td>{l.note}</td>
             <td className={`tabular-nums ${l.delta >= 0 ? "text-leaf" : "text-rose"}`}>
               {l.delta >= 0 ? "+" : "−"}

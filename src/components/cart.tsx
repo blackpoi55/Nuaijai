@@ -167,7 +167,7 @@ function CartDrawer() {
   const [pending, start] = useTransition();
 
   const lines = c.products.filter((p) => c.qty[p.id]);
-  const hasMulti = lines.some((p) => c.qty[p.id] > 1);
+  const hasMulti = lines.some((p) => p.kind === "pass" && c.qty[p.id] > 1);
   const effMode: Mode = hasMulti ? "split" : mode;
   const codeCount = effMode === "single" ? (lines.length ? 1 : 0) : c.count;
   const cost = c.totalBaht * 100;
@@ -264,7 +264,7 @@ function CartDrawer() {
             </div>
             <p className="-mt-2 text-xs text-dim">
               {effMode === "single" ? "กรอกครั้งเดียวได้ครบทุกชิ้น เหมาะกับใช้เอง" : "ได้โค้ดหลายใบ แจกเพื่อนได้คนละใบ"}
-              {hasMulti && " • มีชิ้นที่ซื้อมากกว่า 1 เลยต้องแยกโค้ด"}
+              {hasMulti && " • มีพาสที่ซื้อมากกว่า 1 เลยต้องแยกโค้ด"}
             </p>
 
             <div className="space-y-1.5 text-sm">

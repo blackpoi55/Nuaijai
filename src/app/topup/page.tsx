@@ -1,10 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import { Clock, History, ShieldCheck, Wallet } from "lucide-react";
+import { CheckCircle2, Clock, History, Receipt, ShieldCheck, Wallet, XCircle } from "lucide-react";
 import { getDb, schema } from "@/db";
-import { TopupForm } from "@/components/topup-form";
+import { TopupTabs } from "@/components/topup-tabs";
 import { requireUser } from "@/lib/auth";
 import { formatBaht } from "@/lib/pricing";
-import { getSettings } from "@/lib/settings";
+import { getSettings, promptPayId } from "@/lib/settings";
 
 export const metadata = { title: "เติมแต้ม" };
 export const dynamic = "force-dynamic";
@@ -15,29 +15,25 @@ export default async function TopupPage() {
   const user = await requireUser("/topup");
   const st = await getSettings();
   const db = await getDb();
-  const history = await db
-    .select()
-    .from(schema.pointLedger)
-    .where(eq(schema.pointLedger.userId, user.id))
-    .orderBy(desc(schema.pointLedger.id))
-    .limit(30);
-  const failed = await db
-    .select()
-    .from(schema.topups)
-    .where(eq(schema.topups.userId, user.id))
-    .orderBy(desc(schema.topups.id))
-    .limit(5);
+  const [history, mySlips] = await Promise.all([
+    db.select().from(schema.pointLedger).where(eq(schema.pointLedger.userId, user.id)).orderBy(desc(schema.pointLedger.id)).limit(30),
+    db
+      .select({ id: schema.slips.id, amount: schema.slips.amount, status: schema.slips.status, note: schema.slips.note, createdAt: schema.slips.createdAt })
+      .from(schema.slips)
+      .where(eq(schema.slips.userId, user.id))
+      .orderBy(desc(schema.slips.id))
+      .limit(8),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-        {/* เติม */}
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <section className="glass animate-rise relative overflow-hidden rounded-[2rem] p-6 sm:p-8">
-          <div className="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-orange-500/20 blur-3xl" />
+          <div className="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-orange-500/15 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -left-20 size-72 rounded-full bg-sky-500/10 blur-3xl" />
           <div className="relative">
-            <span className="chip border-orange-300/30 bg-orange-400/10 text-orange-300">ซองอั่งเปา TrueMoney</span>
-            <h1 className="mt-4 text-3xl font-black">เติมแต้ม</h1>
-            <p className="mt-1 text-muted">1 บาท = 1 แต้ม • ระบบรับซองและบวกแต้มอัตโนมัติ</p>
+            <h1 className="text-3xl font-black">เติมแต้ม</h1>
+            <p className="mt-1 text-muted">1 บาท = 1 แต้ม • ใช้แต้มซื้อพาสและไอเทม</p>
 
             <div className="my-6 flex items-center gap-4 rounded-2xl bg-black/30 p-4">
               <div className="grid size-12 place-items-center rounded-xl bg-amber-300/15">
@@ -49,76 +45,85 @@ export default async function TopupPage() {
               </div>
             </div>
 
-            {st.topupOpen ? <TopupForm /> : <p className="rounded-2xl bg-white/5 p-4 text-center text-muted">ปิดรับเติมแต้มชั่วคราว</p>}
+            <TopupTabs angpaoOpen={st.angpaoOpen} promptpayOpen={st.promptpayOpen} promptpayId={promptPayId()} contactUrl={st.contactUrl} />
 
-            <p className="mt-4 flex items-center gap-1.5 text-xs text-dim">
-              <ShieldCheck className="size-4" /> ซองหนึ่งเติมได้ครั้งเดียว • ถ้าแต้มไม่เข้า ติดต่อแอดมินพร้อมลิงก์ซอง
+            <p className="mt-6 flex items-center gap-1.5 text-xs text-dim">
+              <ShieldCheck className="size-4 shrink-0" /> ซองหรือสลิปหนึ่งใบใช้ได้ครั้งเดียว • มีปัญหาติดต่อแอดมิน
             </p>
           </div>
         </section>
 
-        {/* วิธีทำซอง */}
-        <section className="glass animate-rise rounded-[2rem] p-6 sm:p-8" style={{ animationDelay: "80ms" }}>
-          <h2 className="text-lg font-bold">วิธีสร้างซองอั่งเปา</h2>
-          <ol className="mt-4 space-y-4">
-            {[
-              ["เปิดแอป TrueMoney", "กดเมนู ‘ส่งซองของขวัญ’ หรือ ‘อั่งเปา’"],
-              ["ใส่จำนวนเงิน", "เลือกแบ่งให้ 1 คน (ถ้าแบ่งหลายคน ร้านจะได้แค่ส่วนเดียว)"],
-              ["สร้างซองแล้วคัดลอกลิงก์", "ลิงก์หน้าตาแบบ gift.truemoney.com/campaign/?v=..."],
-              ["วางลิงก์ที่ช่องนี้", "กด ‘รับซอง เติมแต้มเลย’ แต้มเข้าทันที"],
-            ].map(([t, d], i) => (
-              <li key={t} className="flex gap-3">
-                <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-400 to-rose-500 text-sm font-black text-white">{i + 1}</span>
-                <div>
-                  <p className="font-semibold">{t}</p>
-                  <p className="text-sm text-muted">{d}</p>
+        <div className="space-y-6">
+          {/* สลิปของฉัน */}
+          <section className="glass animate-rise rounded-[2rem] p-6" style={{ animationDelay: "80ms" }}>
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <Receipt className="size-5 text-sky-300" /> สลิปพร้อมเพย์ของฉัน
+            </h2>
+            {mySlips.length === 0 ? (
+              <p className="mt-4 text-sm text-muted">ยังไม่มีสลิป</p>
+            ) : (
+              <ul className="mt-4 space-y-2">
+                {mySlips.map((s) => (
+                  <li key={s.id} className="flex items-start justify-between gap-3 rounded-xl bg-white/[0.04] px-3.5 py-2.5">
+                    <div>
+                      <p className="font-semibold tabular-nums">฿{formatBaht(s.amount)}</p>
+                      <p className="text-xs text-dim">{fmt.format(s.createdAt)}</p>
+                      {s.status === "rejected" && s.note && <p className="mt-0.5 text-xs text-danger">{s.note}</p>}
+                    </div>
+                    <SlipStatus s={s.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* ประวัติแต้ม */}
+          <section className="glass animate-rise overflow-hidden rounded-[2rem]" style={{ animationDelay: "140ms" }}>
+            <h2 className="flex items-center gap-2 px-6 pt-6 text-lg font-bold">
+              <History className="size-5 text-muted" /> ประวัติแต้ม
+            </h2>
+            <div className="mt-3">
+              {history.length === 0 && <p className="px-6 pb-6 text-sm text-muted">ยังไม่มีรายการ</p>}
+              {history.map((h) => (
+                <div key={h.id} className="flex items-center justify-between gap-3 border-t border-line px-6 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{h.note ?? kindLabel(h.kind)}</p>
+                    <p className="text-xs text-dim">{fmt.format(h.createdAt)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-bold tabular-nums ${h.delta >= 0 ? "text-leaf" : "text-rose"}`}>
+                      {h.delta >= 0 ? "+" : "−"}
+                      {formatBaht(Math.abs(h.delta))}
+                    </p>
+                    <p className="text-xs text-dim">คงเหลือ {formatBaht(h.balanceAfter)}</p>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
-
-      {/* ประวัติ */}
-      <section className="mt-8">
-        <h2 className="mb-4 flex items-center gap-2 text-xl font-bold">
-          <History className="size-5 text-muted" /> ประวัติแต้ม
-        </h2>
-        <div className="glass overflow-hidden rounded-3xl">
-          {history.length === 0 && <p className="p-8 text-center text-muted">ยังไม่มีรายการ</p>}
-          {history.map((h) => (
-            <div key={h.id} className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5 last:border-0">
-              <div>
-                <p className="font-medium">{h.note ?? kindLabel(h.kind)}</p>
-                <p className="text-xs text-dim">{fmt.format(h.createdAt)}</p>
-              </div>
-              <div className="text-right">
-                <p className={`font-bold tabular-nums ${h.delta >= 0 ? "text-leaf" : "text-rose"}`}>
-                  {h.delta >= 0 ? "+" : "−"}
-                  {formatBaht(Math.abs(h.delta))}
-                </p>
-                <p className="text-xs text-dim">คงเหลือ {formatBaht(h.balanceAfter)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {failed.some((f) => f.status !== "success") && (
-          <div className="mt-6">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted">
-              <Clock className="size-4" /> ซองล่าสุด
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {failed.map((f) => (
-                <span key={f.id} className={`chip ${f.status === "success" ? "text-leaf" : f.status === "failed" ? "text-danger" : "text-gold"}`}>
-                  …{f.voucherHash.slice(-6)} · {f.status === "success" ? `+${formatBaht(f.amount)}` : f.status === "failed" ? f.message ?? "ไม่สำเร็จ" : "กำลังตรวจ"}
-                </span>
               ))}
             </div>
-          </div>
-        )}
-      </section>
+          </section>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function SlipStatus({ s }: { s: string }) {
+  if (s === "approved")
+    return (
+      <span className="chip shrink-0 border-leaf/30 bg-leaf/10 text-leaf">
+        <CheckCircle2 className="size-3.5" /> เข้าแล้ว
+      </span>
+    );
+  if (s === "rejected")
+    return (
+      <span className="chip shrink-0 border-danger/30 bg-danger/10 text-danger">
+        <XCircle className="size-3.5" /> ไม่ผ่าน
+      </span>
+    );
+  return (
+    <span className="chip shrink-0 border-gold/30 bg-gold/10 text-gold">
+      <Clock className="size-3.5" /> รอตรวจ
+    </span>
   );
 }
 

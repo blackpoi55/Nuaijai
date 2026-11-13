@@ -42,7 +42,9 @@ export type Perk = { t: string; d: string };
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
-  passKey: text("pass_key").notNull().unique(), // id ของพาสในเกม เช่น "vip"
+  passKey: text("pass_key").notNull().unique(), // id ในเกม: พาส "vip" / กล่อง "box_bubble" / แพ็กกาชา "gacha_x10"
+  // pass = มีได้ชิ้นเดียวต่อคน (ซื้อซ้ำในโค้ดรวมไม่ได้) • item = กล่อง บัตร ตั๋ว ซื้อซ้ำได้
+  kind: text("kind", { enum: ["pass", "item"] }).notNull().default("pass"),
   robloxProductId: bigint("roblox_product_id", { mode: "number" }).notNull(),
   name: text("name").notNull(),
   blurb: text("blurb").notNull().default(""),
@@ -80,6 +82,7 @@ export const topups = pgTable(
 export type OrderItem = {
   productId: number;
   passKey: string;
+  kind?: "pass" | "item";
   name: string;
   priceRobux: number;
   qty: number;
@@ -123,6 +126,26 @@ export const codes = pgTable(
   (t) => [index("codes_user_idx").on(t.userId), index("codes_order_idx").on(t.orderId)],
 );
 
+// เติมผ่านพร้อมเพย์: ผู้ใช้แนบสลิป แอดมินตรวจแล้วกดอนุมัติ
+export const slips = pgTable(
+  "slips",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    amount: integer("amount").notNull(), // สตางค์ ที่ผู้ใช้แจ้ง (แอดมินแก้ได้ตอนอนุมัติ)
+    imageData: text("image_data").notNull(), // data:image/jpeg;base64,... (ย่อจากฝั่งเบราว์เซอร์แล้ว)
+    imageHash: text("image_hash").notNull(), // sha256 ใช้จับสลิปซ้ำ
+    status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+    note: text("note"), // เหตุผลที่ปฏิเสธ
+    adminId: integer("admin_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  },
+  (t) => [index("slips_user_idx").on(t.userId), index("slips_status_idx").on(t.status), index("slips_hash_idx").on(t.imageHash)],
+);
+
 // ทุกการเปลี่ยนแต้ม (เติม ซื้อ แอดมินปรับ คืนเงิน) — ใช้ตรวจย้อนหลัง
 export const pointLedger = pgTable(
   "point_ledger",
@@ -153,3 +176,4 @@ export type Product = typeof products.$inferSelect;
 export type Code = typeof codes.$inferSelect;
 export type Topup = typeof topups.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type Slip = typeof slips.$inferSelect;

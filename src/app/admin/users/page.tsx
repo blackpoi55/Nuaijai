@@ -30,7 +30,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
             <td className="text-xs text-muted">{u.lastLoginAt ? thaiDate.format(u.lastLoginAt) : "-"}</td>
             <td>
               <Link href={`/admin/users/${u.id}`} className="btn btn-ghost !px-3 !py-1.5 text-xs">
-                จัดการ
+                เติม/คืนแต้ม · จัดการ
               </Link>
             </td>
           </tr>

@@ -22,6 +22,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
     initial = {
       id: p.id,
       passKey: p.passKey,
+      kind: p.kind,
       robloxProductId: String(p.robloxProductId),
       name: p.name,
       blurb: p.blurb,

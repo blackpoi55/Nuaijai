@@ -29,7 +29,10 @@ export default async function AdminProducts() {
             <td className="font-semibold">
               {p.name} {p.featured && <span className="chip ml-1 text-gold">เด่น</span>}
             </td>
-            <td className="font-mono text-xs text-muted">{p.passKey}</td>
+            <td className="font-mono text-xs text-muted">
+              {p.passKey}
+              {p.kind === "item" && <span className="chip ml-1 text-aqua">ไอเทม</span>}
+            </td>
             <td className="tabular-nums">{formatNumber(p.priceRobux)} R$</td>
             <td className="tabular-nums">฿{formatNumber(itemBaht(p.priceRobux, st.robuxPerBaht))}</td>
             <td className="text-xs text-muted">{p.saleEnd ? thaiDate.format(p.saleEnd) : "-"}</td>

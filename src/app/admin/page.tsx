@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { desc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { formatBaht, formatNumber } from "@/lib/pricing";
 import { PageTitle, StatTile, Status, Table, thaiDate } from "./ui";
@@ -16,11 +16,17 @@ export default async function AdminHome() {
   const today = startOfBangkokDay();
   const week = startOfBangkokDay(6);
 
-  const sumTopup = (from?: Date) =>
-    db
-      .select({ v: sql<number>`coalesce(sum(${schema.topups.amount}),0)::int`, n: sql<number>`count(*)::int` })
-      .from(schema.topups)
-      .where(and(eq(schema.topups.status, "success"), from ? gte(schema.topups.createdAt, from) : undefined));
+  // เงินเข้าทั้งหมด = ซองอั่งเปาที่สำเร็จ + สลิปพร้อมเพย์ที่อนุมัติ
+  const sumTopup = async (from?: Date) => {
+    const since = from ?? new Date(0);
+    const res = await db.execute<{ v: number; n: number }>(sql`
+      select coalesce(sum(a), 0)::int as v, count(*)::int as n from (
+        select ${schema.topups.amount} as a from ${schema.topups} where ${schema.topups.status} = 'success' and ${schema.topups.createdAt} >= ${since}
+        union all
+        select ${schema.slips.amount} from ${schema.slips} where ${schema.slips.status} = 'approved' and ${schema.slips.reviewedAt} >= ${since}
+      ) t`);
+    return res.rows as { v: number; n: number }[];
+  };
   const sumSales = (from?: Date) =>
     db
       .select({ v: sql<number>`coalesce(sum(${schema.orders.totalBaht}),0)::int`, n: sql<number>`count(*)::int` })
@@ -70,7 +76,7 @@ export default async function AdminHome() {
     <div>
       <PageTitle title="ภาพรวมร้าน" sub="ตัวเลขทั้งหมดเป็นเวลาไทย" />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="เติมเงินวันนี้" value={`฿${formatBaht(tToday.v)}`} hint={`${tToday.n} ซอง`} />
+        <StatTile label="เติมเงินวันนี้" value={`฿${formatBaht(tToday.v)}`} hint={`${tToday.n} รายการ (ซอง + สลิป)`} />
         <StatTile label="เติมเงิน 7 วัน" value={`฿${formatBaht(tWeek.v)}`} hint={`ทั้งหมด ฿${formatBaht(tAll.v)}`} />
         <StatTile label="ขายวันนี้" value={`฿${formatNumber(sToday.v)}`} hint={`${sToday.n} คำสั่งซื้อ`} />
         <StatTile label="ขาย 7 วัน" value={`฿${formatNumber(sWeek.v)}`} hint={`${sWeek.n} คำสั่งซื้อ`} />

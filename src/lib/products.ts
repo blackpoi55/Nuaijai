@@ -1,12 +1,13 @@
 import "server-only";
-import { asc, sql } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Product } from "@/db/schema";
-import { SEED_PASSES } from "@/data/passes";
+import { SEED_ITEMS, SEED_PASSES } from "@/data/passes";
 
 export type PublicProduct = {
   id: number;
   passKey: string;
+  kind: "pass" | "item";
   name: string;
   blurb: string;
   perks: { t: string; d: string }[];
@@ -29,6 +30,7 @@ export function toPublic(p: Product): PublicProduct {
   return {
     id: p.id,
     passKey: p.passKey,
+    kind: p.kind,
     name: p.name,
     blurb: p.blurb,
     perks: p.perks ?? [],
@@ -40,16 +42,30 @@ export function toPublic(p: Product): PublicProduct {
   };
 }
 
-/** ใส่พาสตั้งต้นจากเกม ถ้าตารางยังว่าง */
-export async function ensureSeeded() {
+/** ใส่สินค้าตั้งต้นจากเกมที่ยังไม่มีในตาราง (ทำครั้งเดียวต่อเซิร์ฟเวอร์ ของที่แอดมินแก้แล้วไม่ถูกทับ) */
+const g = globalThis as unknown as { __nhSeeded?: Promise<void> };
+export function ensureSeeded(): Promise<void> {
+  if (!g.__nhSeeded) {
+    g.__nhSeeded = seedMissing().catch((e) => {
+      g.__nhSeeded = undefined;
+      throw e;
+    });
+  }
+  return g.__nhSeeded;
+}
+
+async function seedMissing() {
   const db = await getDb();
-  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.products);
-  if (n > 0) return;
+  const all = [...SEED_PASSES, ...SEED_ITEMS];
+  const have = new Set((await db.select({ k: schema.products.passKey }).from(schema.products)).map((r) => r.k));
+  const missing = all.filter((p) => !have.has(p.passKey));
+  if (missing.length === 0) return;
   await db
     .insert(schema.products)
     .values(
-      SEED_PASSES.map((p) => ({
+      missing.map((p) => ({
         passKey: p.passKey,
+        kind: p.kind ?? "pass",
         robloxProductId: p.robloxProductId,
         name: p.name,
         blurb: p.blurb,

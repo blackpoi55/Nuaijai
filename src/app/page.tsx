@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Calculator, Gamepad2, Gift, ShoppingBag, Sparkles, Timer, Wallet, Zap } from "lucide-react";
+import { ArrowRight, Calculator, Gamepad2, Gift, Package, ShoppingBag, Sparkles, Ticket, Timer, Wallet, Zap } from "lucide-react";
 import { HeroCard } from "@/components/hero-card";
 import { ProductCard } from "@/components/product-card";
 import { listOnSale } from "@/lib/products";
@@ -10,8 +10,11 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const [products, st] = await Promise.all([listOnSale(), getSettings()]);
   const featured = products.find((p) => p.featured) ?? products[0];
-  const permanent = products.filter((p) => !p.saleEnd);
-  const limited = products.filter((p) => p.saleEnd);
+  const passes = products.filter((p) => p.kind === "pass");
+  const permanent = passes.filter((p) => !p.saleEnd);
+  const limited = passes.filter((p) => p.saleEnd);
+  const gacha = products.filter((p) => p.kind === "item" && p.passKey.startsWith("gacha_"));
+  const boxes = products.filter((p) => p.kind === "item" && !p.passKey.startsWith("gacha_"));
 
   return (
     <div className="mx-auto max-w-6xl px-4">
@@ -27,7 +30,7 @@ export default async function Home() {
             <span className="text-shine">คุ้มกว่า ง่ายกว่า</span>
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            เติมแต้มด้วยซองอั่งเปา TrueMoney เลือกพาสลงตะกร้า แล้วรับโค้ดไปกรอกในเกมได้ทันที
+            เติมแต้มด้วยซองอั่งเปา TrueMoney หรือพร้อมเพย์ เลือกพาสลงตะกร้า แล้วรับโค้ดไปกรอกในเกมได้ทันที
             ราคาคิดจาก Robux เต็ม ÷ {st.robuxPerBaht}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -49,7 +52,7 @@ export default async function Home() {
 
       {/* ---------------- STEPS ---------------- */}
       <section className="grid gap-4 pb-20 md:grid-cols-3">
-        <Step n={1} icon={Wallet} title="เติมแต้ม" text="ส่งซองอั่งเปา TrueMoney มาที่หน้าเติมแต้ม ระบบตรวจแล้วบวกแต้มให้อัตโนมัติ 1 บาท = 1 แต้ม" />
+        <Step n={1} icon={Wallet} title="เติมแต้ม" text="ซองอั่งเปา TrueMoney แต้มเข้าทันที หรือโอนพร้อมเพย์แล้วแนบสลิปให้แอดมินตรวจ • 1 บาท = 1 แต้ม" />
         <Step n={2} icon={ShoppingBag} title="เลือกพาส" text="ใส่พาสลงตะกร้า ราคารวมคิดจาก Robux ทั้งตะกร้า ÷ 6 แล้วปัดเศษขึ้น" />
         <Step n={3} icon={Gamepad2} title="กรอกโค้ดในเกม" text="ได้โค้ดทันที เปิดมือถือในเกม → แอปโค้ด → กรอกโค้ด รับพาสถาวร" />
       </section>
@@ -67,8 +70,30 @@ export default async function Home() {
       {limited.length > 0 && (
         <section className="pb-16">
           <SectionTitle title="ของลิมิเต็ด" sub="ขายช่วงเทศกาลเท่านั้น หมดเวลาแล้วหายจากร้าน" icon={Timer} />
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {limited.map((p, i) => (
+              <ProductCard key={p.id} p={p} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {boxes.length > 0 && (
+        <section id="boxes" className="scroll-mt-24 pb-16">
+          <SectionTitle title="กล่องเลือก & บัตร" sub="ซื้อซ้ำได้ ซื้อหลายชิ้นรวมในโค้ดเดียวได้" icon={Package} />
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {boxes.map((p, i) => (
+              <ProductCard key={p.id} p={p} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {gacha.length > 0 && (
+        <section id="gacha" className="scroll-mt-24 pb-16">
+          <SectionTitle title="ตั๋วสุ่มกาชา" sub="ยิ่งซื้อแพ็กใหญ่ยิ่งคุ้ม • ตั๋วแลกเปลี่ยนได้" icon={Ticket} />
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {gacha.map((p, i) => (
               <ProductCard key={p.id} p={p} index={i} />
             ))}
           </div>
@@ -85,7 +110,7 @@ export default async function Home() {
             เอาราคา Robux เต็มของทุกชิ้นในตะกร้ามารวมกัน แล้วหาร {st.robuxPerBaht} ปัดเศษขึ้นเป็นบาท เช่น VIP 89 R$ + ลำโพง 69 R$ = 158 R$ ÷ {st.robuxPerBaht} = 26.33 → จ่าย 27 บาท
           </Faq>
           <Faq q="เติมแต้มยังไง?">
-            เปิดแอป TrueMoney → ส่งซองของขวัญ (อั่งเปา) → ใส่จำนวนเงิน เลือกแบ่ง 1 คน → คัดลอกลิงก์ซอง แล้ววางในหน้าเติมแต้ม ระบบจะรับซองและบวกแต้มให้อัตโนมัติ
+            เปิดแอป TrueMoney → ส่งซองของขวัญ (อั่งเปา) → ใส่จำนวนเงิน เลือกแบ่ง 1 คน → คัดลอกลิงก์ซอง แล้ววางในหน้าเติมแต้ม ระบบจะรับซองและบวกแต้มให้อัตโนมัติ หรือเลือกแท็บพร้อมเพย์ สแกน QR โอนเงิน แล้วแนบสลิป แต้มเข้าหลังแอดมินตรวจ
           </Faq>
           <Faq q="ใช้โค้ดยังไง?">
             เข้าเกมเหนื่อยใจ เปิดมือถือในเกม → แอป ‘โค้ด’ → กรอกโค้ด แล้วกดรับของ พาสจะเข้าตัวละครทันที โค้ดใช้ได้ครั้งเดียว
