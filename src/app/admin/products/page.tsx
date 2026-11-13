@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PassIcon } from "@/components/ui";
-import { iconUrl, isOnSale, listAllProducts } from "@/lib/products";
+import { iconUrl, isOnSale, listAllProducts, thumbsFor } from "@/lib/products";
 import { formatNumber, itemBaht } from "@/lib/pricing";
 import { getSettings } from "@/lib/settings";
 import { PageTitle, Table, thaiDate } from "../ui";
@@ -9,6 +9,7 @@ import { ToggleActive } from "./toggle";
 
 export default async function AdminProducts() {
   const [products, st] = await Promise.all([listAllProducts(), getSettings()]);
+  const thumbs = await thumbsFor(products);
   return (
     <div>
       <PageTitle
@@ -24,7 +25,7 @@ export default async function AdminProducts() {
         {products.map((p) => (
           <tr key={p.id}>
             <td className="w-14">
-              <PassIcon src={iconUrl(p.iconAssetId)} name={p.name} color={p.color} className="size-10 rounded-lg" />
+              <PassIcon src={iconUrl(p.iconAssetId, thumbs)} name={p.name} color={p.color} className="size-10 rounded-lg" />
             </td>
             <td className="font-semibold">
               {p.name} {p.featured && <span className="chip ml-1 text-gold">เด่น</span>}

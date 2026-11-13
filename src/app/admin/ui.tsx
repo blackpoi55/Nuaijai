@@ -1,4 +1,5 @@
 // ชิ้นส่วน UI ของหลังบ้าน (server-safe)
+import { RTable } from "./rtable";
 export function PageTitle({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -23,8 +24,8 @@ export function StatTile({ label, value, hint }: { label: string; value: string;
 
 export function Table({ head, children, empty }: { head: React.ReactNode[]; children: React.ReactNode; empty?: boolean }) {
   return (
-    <div className="glass scrollbar-thin overflow-x-auto rounded-2xl">
-      <table className="w-full min-w-[640px] text-left text-sm">
+    <RTable>
+      <table className="w-full text-left text-sm sm:min-w-[640px]">
         <thead className="border-b border-line text-xs text-muted">
           <tr>
             {head.map((h, i) => (
@@ -34,10 +35,10 @@ export function Table({ head, children, empty }: { head: React.ReactNode[]; chil
             ))}
           </tr>
         </thead>
-        <tbody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3[&_tr]:border-b [&_tr]:border-line [&_tr:last-child]:border-0">{children}</tbody>
+        <tbody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3 [&_tr]:border-b [&_tr]:border-line [&_tr:last-child]:border-0">{children}</tbody>
       </table>
       {empty && <p className="p-8 text-center text-muted">ไม่มีข้อมูล</p>}
-    </div>
+    </RTable>
   );
 }
 

@@ -78,8 +78,10 @@ export default async function AdminTests() {
                 </td>
                 <td>{i === 0 ? u : ""}</td>
                 <td>
-                  <span className="font-mono text-xs">{prettyCode(c.code)}</span>
-                  <div className="max-w-[220px] truncate text-xs text-muted">{c.label}</div>
+                  <div>
+                    <span className="font-mono text-xs">{prettyCode(c.code)}</span>
+                    <div className="max-w-[220px] truncate text-xs text-muted">{c.label}</div>
+                  </div>
                 </td>
                 <td>
                   <Status s={c.status} />

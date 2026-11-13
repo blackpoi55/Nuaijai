@@ -282,6 +282,52 @@ body {
   filter: brightness(1.25);
 }
 
+/* ตารางหลังบ้านบนมือถือ: แถวละการ์ด, ชื่อคอลัมน์อยู่ซ้าย ค่าอยู่ขวา */
+@media (max-width: 639px) {
+  .rtable table,
+  .rtable tbody,
+  .rtable tr,
+  .rtable td {
+    display: block;
+    width: 100%;
+  }
+  .rtable thead {
+    display: none;
+  }
+  .rtable tbody tr {
+    padding: 0.75rem 1rem;
+  }
+  .rtable tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.3rem 0 !important;
+    white-space: normal !important;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  .rtable tbody td > * {
+    max-width: 70%;
+  }
+  .rtable tbody td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 40%;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-dim);
+    padding-top: 0.1rem;
+  }
+  .rtable tbody td[data-label=""]::before {
+    display: none;
+  }
+  .rtable tbody td:empty {
+    display: none;
+  }
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 8px;
   height: 8px;

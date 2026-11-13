@@ -3,6 +3,7 @@ import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Product } from "@/db/schema";
 import { SEED_ITEMS, SEED_PASSES } from "@/data/passes";
+import { getThumbs } from "./thumbs";
 
 export type PublicProduct = {
   id: number;
@@ -18,15 +19,22 @@ export type PublicProduct = {
   saleEnd: string | null;
 };
 
-export function iconUrl(assetId: number | null | undefined) {
-  return assetId ? `/api/thumb/${assetId}` : null;
+/** URL รูปไอคอน: ใช้ URL CDN ที่ขอมาแล้ว (thumbs) ถ้ามี ไม่งั้นใช้ route สำรอง /api/thumb */
+export function iconUrl(assetId: number | null | undefined, thumbs?: Map<number, string>) {
+  if (!assetId) return null;
+  return thumbs?.get(assetId) ?? `/api/thumb/${assetId}`;
+}
+
+/** ขอรูปของสินค้าทั้งหมดในครั้งเดียว */
+export function thumbsFor(products: Pick<Product, "iconAssetId">[]) {
+  return getThumbs(products.map((p) => p.iconAssetId)).catch(() => new Map<number, string>());
 }
 
 export function isOnSale(p: Pick<Product, "active" | "saleEnd">, now = new Date()) {
   return p.active && (!p.saleEnd || p.saleEnd > now);
 }
 
-export function toPublic(p: Product): PublicProduct {
+export function toPublic(p: Product, thumbs?: Map<number, string>): PublicProduct {
   return {
     id: p.id,
     passKey: p.passKey,
@@ -35,7 +43,7 @@ export function toPublic(p: Product): PublicProduct {
     blurb: p.blurb,
     perks: p.perks ?? [],
     color: p.color,
-    iconUrl: iconUrl(p.iconAssetId),
+    iconUrl: iconUrl(p.iconAssetId, thumbs),
     priceRobux: p.priceRobux,
     featured: p.featured,
     saleEnd: p.saleEnd ? p.saleEnd.toISOString() : null,
@@ -90,5 +98,7 @@ export async function listAllProducts(): Promise<Product[]> {
 export async function listOnSale(): Promise<PublicProduct[]> {
   const all = await listAllProducts();
   const now = new Date();
-  return all.filter((p) => isOnSale(p, now)).map(toPublic);
+  const onSale = all.filter((p) => isOnSale(p, now));
+  const thumbs = await thumbsFor(onSale);
+  return onSale.map((p) => toPublic(p, thumbs));
 }
