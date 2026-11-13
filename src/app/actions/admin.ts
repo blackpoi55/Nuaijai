@@ -378,3 +378,13 @@ export async function unlockUserAction(userId: number) {
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
 }
+
+/** บันทึกเฉพาะค่าวงล้อ (ไม่ไปทับค่าอื่นในหน้าตั้งค่า) */
+export async function saveSettingsPartialAction(_: AdminState, f: FormData): Promise<AdminState> {
+  await requireAdmin();
+  const per = Math.floor(Number(f.get("bahtPerSpin")));
+  if (!(per >= 1 && per <= 100000)) return { error: "ใส่ยอดบาทต่อ 1 สิทธิ์" };
+  await saveSettings({ wheelOpen: f.get("wheelOpen") === "on", bahtPerSpin: per });
+  revalidatePath("/", "layout");
+  return { ok: "บันทึกแล้ว" };
+}

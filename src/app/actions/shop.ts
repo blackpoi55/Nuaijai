@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { and, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { notifyAdmins } from "@/lib/notify";
+import { notifyAdmins, notifyUser } from "@/lib/notify";
 import { getDb, schema } from "@/db";
 import type { Coupon, OrderItem } from "@/db/schema";
 import { discountFor, findUsableCoupon } from "@/lib/coupons";
@@ -214,13 +214,14 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
 
   // คำสั่งซื้อของแอดมิน = เทส ไม่นับรายได้ และไม่แจ้งเตือน "ขายได้"
   const isTest = user.role === "admin";
+  let earnedSpins = 0;
   try {
     const orderId = await db.transaction(async (tx) => {
       const [u] = await tx
         .update(schema.users)
         .set({ points: sql`${schema.users.points} - ${cost}` })
         .where(and(eq(schema.users.id, user.id), gte(schema.users.points, cost)))
-        .returning({ points: schema.users.points });
+        .returning({ points: schema.users.points, spinCredits: schema.users.spinCredits });
       if (!u) throw new Error("NOFUNDS");
       const [o] = await tx
         .insert(schema.orders)
@@ -238,6 +239,19 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
       await tx.insert(schema.codes).values(
         bundles.map((b) => ({ code: newCode(), orderId: o.id, userId: user.id, passKeys: b.passKeys, label: b.label, isTest })),
       );
+      // วงล้อ: ซื้อสะสมครบ bahtPerSpin บาท ได้ 1 สิทธิ์หมุน (คิดจากยอดที่จ่ายจริง)
+      if (st.wheelOpen && totalBaht > 0) {
+        const per = st.bahtPerSpin;
+        const [w] = await tx
+          .update(schema.users)
+          .set({
+            spinCredits: sql`${schema.users.spinCredits} + ((${schema.users.spinProgress} + ${totalBaht}) / ${per})`,
+            spinProgress: sql`(${schema.users.spinProgress} + ${totalBaht}) % ${per}`,
+          })
+          .where(eq(schema.users.id, user.id))
+          .returning({ credits: schema.users.spinCredits });
+        earnedSpins = w.credits - u.spinCredits;
+      }
       await tx.insert(schema.pointLedger).values({
         userId: user.id,
         delta: -cost,
@@ -249,6 +263,8 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
       return o.id;
     });
     revalidatePath("/", "layout");
+    if (earnedSpins > 0)
+      after(() => notifyUser(user.id, { title: `🎡 ได้สิทธิ์หมุนวงล้อ +${earnedSpins}`, body: "ไปลุ้นรางวัลที่หน้าวงล้อได้เลย", url: "/wheel", action: "หมุนเลย" }));
     if (!isTest)
       after(() =>
       notifyAdmins({

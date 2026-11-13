@@ -2,7 +2,7 @@ import Link from "next/link";
 import { desc, ilike } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { formatBaht } from "@/lib/pricing";
-import { PageTitle, SearchBox, Table, thaiDate } from "../ui";
+import { PageTitle, SearchBox, Table, likeEscape, thaiDate } from "../ui";
 
 export default async function AdminUsers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
@@ -10,7 +10,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
   const rows = await db
     .select()
     .from(schema.users)
-    .where(q ? ilike(schema.users.username, `%${q.toLowerCase().replace(/[%_]/g, "")}%`) : undefined)
+    .where(q ? ilike(schema.users.username, `%${likeEscape(q.toLowerCase())}%`) : undefined)
     .orderBy(desc(schema.users.id))
     .limit(100);
   return (

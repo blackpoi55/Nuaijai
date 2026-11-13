@@ -55,7 +55,10 @@ export function Status({ s }: { s: string }) {
   return <span className={`chip ${cls}`}>{label}</span>;
 }
 
-export const thaiDate = new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" });
+/** ค้นหาแบบ ILIKE: ให้ _ และ % เป็นตัวอักษรธรรมดา (ชื่อผู้ใช้มี _ ได้) */
+export const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+export const thaiDate =new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" });
 
 export function SearchBox({ placeholder, defaultValue }: { placeholder: string; defaultValue?: string }) {
   return (

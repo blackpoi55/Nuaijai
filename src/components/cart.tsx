@@ -13,8 +13,15 @@ import { PassIcon } from "./ui";
 type Mode = "single" | "split";
 type Toast = { id: number; text: string; kind: "ok" | "err" };
 
+type MyCoupon = { code: string; label: string; minBaht: number };
+
 type Ctx = {
   products: PublicProduct[];
+  myCoupons: MyCoupon[];
+  /** เปิดตะกร้าพร้อมใส่คูปองนี้ให้ (เช่น กดจากหน้าโค้ดของฉัน) */
+  openCartWithCoupon: (code: string) => void;
+  requestedCoupon: string | null;
+  clearRequestedCoupon: () => void;
   rate: number;
   signedIn: boolean;
   points: number;
@@ -44,14 +51,17 @@ export function CartProvider({
   rate,
   signedIn,
   points,
+  myCoupons = [],
   children,
 }: {
   products: PublicProduct[];
   rate: number;
   signedIn: boolean;
   points: number;
+  myCoupons?: MyCoupon[];
   children: React.ReactNode;
 }) {
+  const [requestedCoupon, setRequestedCoupon] = useState<string | null>(null);
   const [qty, setQtyState] = useState<Record<number, number>>({});
   const [open, setOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -102,6 +112,13 @@ export function CartProvider({
 
   const value: Ctx = {
     products,
+    myCoupons,
+    openCartWithCoupon: (code: string) => {
+      setRequestedCoupon(code);
+      setOpen(true);
+    },
+    requestedCoupon,
+    clearRequestedCoupon: () => setRequestedCoupon(null),
     rate,
     signedIn,
     points,
@@ -190,6 +207,15 @@ function CartDrawer() {
       }
     });
   };
+
+  // เปิดตะกร้ามาพร้อมคูปองที่ขอ (จากหน้าโค้ดของฉัน)
+  useEffect(() => {
+    if (c.open && c.requestedCoupon && c.totalBaht > 0) {
+      applyCoupon(c.requestedCoupon);
+      c.clearRequestedCoupon();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.open, c.requestedCoupon, c.totalBaht]);
 
   // ยอดในตะกร้าเปลี่ยน = คิดส่วนลดใหม่
   useEffect(() => {
@@ -343,6 +369,24 @@ function CartDrawer() {
                     </button>
                   </div>
                   {couponMsg && <p className="text-xs text-danger">{couponMsg}</p>}
+                  {c.myCoupons.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="w-full text-[11px] text-dim">คูปองของคุณ — แตะเพื่อใช้</span>
+                      {c.myCoupons.map((m) => (
+                        <button
+                          key={m.code}
+                          type="button"
+                          disabled={checking}
+                          onClick={() => applyCoupon(m.code)}
+                          className="chip cursor-pointer border-gold/40 bg-gold/10 text-gold transition hover:bg-gold/20"
+                          title={m.code}
+                        >
+                          <TicketPercent className="size-3.5" /> {m.label}
+                          {m.minBaht > 0 && <span className="text-[10px] text-gold/70">ขั้นต่ำ ฿{m.minBaht}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </form>
               ))}
 

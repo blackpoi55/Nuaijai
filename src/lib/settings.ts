@@ -9,6 +9,8 @@ export type ShopSettings = {
   promptpayOpen: boolean; // เติมด้วยพร้อมเพย์ + แนบสลิป
   announcement: string;
   contactUrl: string; // ลิงก์ทักแอดมิน (Discord) ให้ตรวจสลิปเร็ว
+  wheelOpen: boolean; // วงล้อเสี่ยงโชค
+  bahtPerSpin: number; // ซื้อสะสมกี่บาทได้ 1 สิทธิ์หมุน
 };
 
 const DEFAULTS: ShopSettings = {
@@ -18,6 +20,8 @@ const DEFAULTS: ShopSettings = {
   promptpayOpen: true,
   announcement: "",
   contactUrl: "https://discord.com/users/335392827938832384",
+  wheelOpen: true,
+  bahtPerSpin: 100,
 };
 
 export async function getSettings(): Promise<ShopSettings> {
@@ -28,6 +32,7 @@ export async function getSettings(): Promise<ShopSettings> {
     if (r.key in out) (out as Record<string, unknown>)[r.key] = r.value;
   }
   if (!(out.robuxPerBaht >= 1)) out.robuxPerBaht = DEFAULT_ROBUX_PER_BAHT;
+  if (!(out.bahtPerSpin >= 1)) out.bahtPerSpin = 100;
   return out;
 }
 

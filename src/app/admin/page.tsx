@@ -31,7 +31,7 @@ export default async function AdminHome() {
     db
       .select({ v: sql<number>`coalesce(sum(${schema.orders.totalBaht}),0)::int`, n: sql<number>`count(*)::int` })
       .from(schema.orders)
-      .where(and(eq(schema.orders.isTest, false), from ? gte(schema.orders.createdAt, from) : undefined));
+      .where(and(eq(schema.orders.isTest, false), eq(schema.orders.source, "shop"), from ? gte(schema.orders.createdAt, from) : undefined));
 
   const [[tToday], [tWeek], [tAll], [sToday], [sWeek], [users], [codeStats], recentTopups, recentOrders, recentOrderItems] = await Promise.all([
     sumTopup(today),
@@ -62,10 +62,10 @@ export default async function AdminHome() {
       .select({ o: schema.orders, u: schema.users.displayName })
       .from(schema.orders)
       .innerJoin(schema.users, eq(schema.orders.userId, schema.users.id))
-      .where(eq(schema.orders.isTest, false))
+      .where(and(eq(schema.orders.isTest, false), eq(schema.orders.source, "shop")))
       .orderBy(desc(schema.orders.id))
       .limit(8),
-    db.select({ items: schema.orders.items }).from(schema.orders).where(and(eq(schema.orders.isTest, false), gte(schema.orders.createdAt, startOfBangkokDay(29)))),
+    db.select({ items: schema.orders.items }).from(schema.orders).where(and(eq(schema.orders.isTest, false), eq(schema.orders.source, "shop"), gte(schema.orders.createdAt, startOfBangkokDay(29)))),
   ]);
 
   // ขายดี 30 วัน

@@ -1,6 +1,6 @@
 import "server-only";
 import { randomInt } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Coupon } from "@/db/schema";
 
@@ -36,6 +36,7 @@ export async function findUsableCoupon(raw: unknown, userId: number): Promise<{ 
   const db = await getDb();
   const [c] = await db.select().from(schema.coupons).where(eq(schema.coupons.code, code)).limit(1);
   if (!c || !c.active) return { ok: false, message: "ไม่พบคูปองนี้" };
+  if (c.ownerId && c.ownerId !== userId) return { ok: false, message: "คูปองนี้เป็นของบัญชีอื่น" };
   if (c.expiresAt && c.expiresAt < new Date()) return { ok: false, message: "คูปองนี้หมดอายุแล้ว" };
   if (c.usedCount >= c.maxUses) return { ok: false, message: "คูปองนี้ถูกใช้ครบจำนวนแล้ว" };
   const [mine] = await db
@@ -45,4 +46,36 @@ export async function findUsableCoupon(raw: unknown, userId: number): Promise<{ 
     .limit(1);
   if (mine) return { ok: false, message: "คุณใช้คูปองนี้ไปแล้ว" };
   return { ok: true, coupon: c };
+}
+
+export type MyCoupon = { code: string; label: string; kind: "points" | "discount"; expiresAt: string | null; minBaht: number };
+
+/** คูปองส่วนตัวที่ยังใช้ได้ของผู้ใช้ (เช่น ได้จากวงล้อ) */
+export async function listMyCoupons(userId: number): Promise<MyCoupon[]> {
+  const db = await getDb();
+  const rows = await db
+    .select()
+    .from(schema.coupons)
+    .leftJoin(
+      schema.couponRedemptions,
+      and(eq(schema.couponRedemptions.couponId, schema.coupons.id), eq(schema.couponRedemptions.userId, userId)),
+    )
+    .where(
+      and(
+        eq(schema.coupons.ownerId, userId),
+        eq(schema.coupons.active, true),
+        lt(schema.coupons.usedCount, schema.coupons.maxUses),
+        or(isNull(schema.coupons.expiresAt), gt(schema.coupons.expiresAt, sql`now()`)),
+        isNull(schema.couponRedemptions.id),
+      ),
+    )
+    .orderBy(desc(schema.coupons.id))
+    .limit(30);
+  return rows.map(({ coupons: c }) => ({
+    code: c.code,
+    label: couponLabel(c),
+    kind: c.kind,
+    expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
+    minBaht: c.minBaht,
+  }));
 }

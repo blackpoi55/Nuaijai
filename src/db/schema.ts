@@ -28,6 +28,9 @@ export const users = pgTable("users", {
   failedLogins: integer("failed_logins").notNull().default(0),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   signupIp: text("signup_ip"), // sha256 ของ IP (ไม่เก็บ IP จริง)
+  // วงล้อ: สิทธิ์หมุนที่เหลือ และยอดซื้อสะสม (บาท) ที่ยังไม่ครบ 1 สิทธิ์
+  spinCredits: integer("spin_credits").notNull().default(0),
+  spinProgress: integer("spin_progress").notNull().default(0),
 });
 
 export const sessions = pgTable(
@@ -110,6 +113,8 @@ export const orders = pgTable(
     couponId: integer("coupon_id"),
     robuxPerBaht: integer("robux_per_baht").notNull(),
     mode: text("mode", { enum: ["single", "split"] }).notNull(),
+    // shop = ซื้อจริง • wheel = รางวัลจากวงล้อ (ไม่นับยอดขาย)
+    source: text("source", { enum: ["shop", "wheel"] }).notNull().default("shop"),
     // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
     isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -214,6 +219,7 @@ export const coupons = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     active: boolean("active").notNull().default(true),
     batch: text("batch").notNull(), // ชุดที่สร้างพร้อมกัน
+    ownerId: integer("owner_id"), // คูปองส่วนตัว (เช่น ได้จากวงล้อ) — ว่าง = คูปองแจกทั่วไป
     note: text("note").notNull().default(""),
     createdBy: integer("created_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -239,6 +245,39 @@ export const couponRedemptions = pgTable(
   (t) => [uniqueIndex("coupon_user_uq").on(t.couponId, t.userId), index("coupon_ip_idx").on(t.couponId, t.ip)], // คนละครั้ง
 );
 
+// วงล้อเสี่ยงโชค (ได้สิทธิ์หมุนจากการซื้อเท่านั้น ไม่มีการจ่ายเพื่อหมุน)
+// kind: points = แต้ม (value = สตางค์) • coupon = คูปองส่วนลดส่วนตัว (value = %/บาท ตาม couponType) • item = โค้ดของในเกม (passKey) • none = เกือบได้
+export const wheelPrizes = pgTable("wheel_prizes", {
+  id: serial("id").primaryKey(),
+  label: text("label").notNull(),
+  kind: text("kind", { enum: ["points", "coupon", "item", "none"] }).notNull(),
+  value: integer("value").notNull().default(0),
+  couponType: text("coupon_type", { enum: ["percent", "baht"] }),
+  passKey: text("pass_key"),
+  weight: integer("weight").notNull().default(1), // โอกาสออก (สัดส่วน)
+  stock: integer("stock"), // จำนวนที่เหลือ (ว่าง = ไม่จำกัด)
+  color: text("color").notNull().default("#e2c27d"),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const wheelSpins = pgTable(
+  "wheel_spins",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    prizeId: integer("prize_id"),
+    label: text("label").notNull(),
+    kind: text("kind").notNull(),
+    reward: text("reward"), // โค้ดคูปอง / โค้ดเกม ที่ได้
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("wheel_spins_user_idx").on(t.userId)],
+);
+
 // ทุกการเปลี่ยนแต้ม (เติม ซื้อ แอดมินปรับ คืนเงิน) — ใช้ตรวจย้อนหลัง
 export const pointLedger = pgTable(
   "point_ledger",
@@ -249,7 +288,7 @@ export const pointLedger = pgTable(
       .references(() => users.id),
     delta: integer("delta").notNull(), // สตางค์ (+/-)
     balanceAfter: integer("balance_after").notNull(),
-    kind: text("kind", { enum: ["topup", "purchase", "admin", "refund", "coupon"] }).notNull(),
+    kind: text("kind", { enum: ["topup", "purchase", "admin", "refund", "coupon", "wheel"] }).notNull(),
     note: text("note"),
     refId: integer("ref_id"),
     adminId: integer("admin_id"),
@@ -271,3 +310,4 @@ export type Topup = typeof topups.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Slip = typeof slips.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
+export type WheelPrize = typeof wheelPrizes.$inferSelect;

@@ -3,6 +3,8 @@ import { desc, eq } from "drizzle-orm";
 import { ShoppingBag, Ticket } from "lucide-react";
 import { getDb, schema } from "@/db";
 import { CodeTicket, HowTo } from "@/components/code-ticket";
+import { MyCoupons } from "@/components/my-coupons";
+import { listMyCoupons } from "@/lib/coupons";
 import { requireUser } from "@/lib/auth";
 import { listAllProducts } from "@/lib/products";
 import { formatNumber } from "@/lib/pricing";
@@ -15,10 +17,11 @@ const fmt = new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "
 export default async function OrdersPage() {
   const user = await requireUser("/orders");
   const db = await getDb();
-  const [orders, codes, products] = await Promise.all([
+  const [orders, codes, products, myCoupons] = await Promise.all([
     db.select().from(schema.orders).where(eq(schema.orders.userId, user.id)).orderBy(desc(schema.orders.id)).limit(100),
     db.select().from(schema.codes).where(eq(schema.codes.userId, user.id)).orderBy(desc(schema.codes.id)).limit(500),
     listAllProducts(),
+    listMyCoupons(user.id),
   ]);
   const colors = Object.fromEntries(products.map((p) => [p.passKey, p.color]));
   const active = codes.filter((c) => c.status === "active").length;
@@ -34,6 +37,8 @@ export default async function OrdersPage() {
         </div>
         <HowTo />
       </div>
+
+      <MyCoupons items={myCoupons} />
 
       {orders.length === 0 && (
         <div className="glass mt-8 rounded-3xl p-10 text-center">

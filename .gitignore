@@ -44,3 +44,7 @@ next-env.d.ts
 
 # local database
 /.pglite
+/.pglite-test
+
+# บัญชีทดสอบในเครื่อง
+/test-login.local.txt

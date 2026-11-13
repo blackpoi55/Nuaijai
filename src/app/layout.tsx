@@ -8,6 +8,7 @@ import { PwaProvider } from "@/components/pwa";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { vapidPublicKey } from "@/lib/notify";
+import { listMyCoupons } from "@/lib/coupons";
 import { getCurrentUser } from "@/lib/auth";
 import { listOnSale } from "@/lib/products";
 import { getSettings } from "@/lib/settings";
@@ -49,7 +50,7 @@ async function unreadCount(userId: number) {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [user, products, st] = await Promise.all([getCurrentUser(), listOnSale(), getSettings()]);
-  const unread = user ? await unreadCount(user.id) : 0;
+  const [unread, myCoupons] = user ? await Promise.all([unreadCount(user.id), listMyCoupons(user.id)]) : [0, []];
   const navUser = user ? { name: user.displayName, points: user.points, admin: user.role === "admin", unread } : null;
 
   return (
@@ -59,15 +60,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <i />
         </div>
         <PwaProvider userId={user?.id ?? null}>
-        <CartProvider products={products} rate={st.robuxPerBaht} signedIn={!!user} points={user?.points ?? 0}>
+        <CartProvider products={products} rate={st.robuxPerBaht} signedIn={!!user} points={user?.points ?? 0} myCoupons={myCoupons.filter((c) => c.kind === "discount")}>
           <Nav user={navUser} vapidKey={vapidPublicKey()} />
           {st.announcement && (
             <div className="border-b border-line bg-gradient-to-r from-transparent via-amber-200/10 to-transparent px-4 py-2 text-center text-sm text-champagne">
               {st.announcement}
             </div>
           )}
-          <main className="overflow-x-clip pb-28 md:pb-12">{children}</main>
-          <footer className="mx-auto hidden max-w-6xl px-4 pb-12 md:block">
+          <main className="overflow-x-clip pb-28 lg:pb-12">{children}</main>
+          <footer className="mx-auto hidden max-w-6xl px-4 pb-12 lg:block">
             <div className="gold-rule mb-6" />
             <div className="flex items-center justify-between text-xs tracking-wide text-dim">
               <span>© {new Date().getFullYear()} เหนื่อยใจ</span>

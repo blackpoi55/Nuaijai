@@ -86,7 +86,7 @@ export function InstallButton({ className = "" }: { className?: string }) {
   return (
     <button onClick={install} className={`btn btn-ghost !px-3 !py-2 text-sm ${className}`} title="ติดตั้งแอป">
       <Download className="size-4 text-leaf" />
-      <span className="hidden lg:inline">ติดตั้งแอป</span>
+      <span className="hidden xl:inline">ติดตั้งแอป</span>
     </button>
   );
 }

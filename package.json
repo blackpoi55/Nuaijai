@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "unlock": "tsx scripts/unlock.ts"
+    "unlock": "tsx scripts/unlock.ts",
+    "backfill:spins": "tsx scripts/backfill-spins.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.16",
