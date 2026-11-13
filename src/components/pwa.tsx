@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Download, PlusSquare, Share, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Download } from "lucide-react";
 import { removePushSubscriptionAction, savePushSubscriptionAction } from "@/app/actions/notify";
 
-// ลงทะเบียน service worker + ปุ่มติดตั้งแอป (Android/คอมใช้ prompt ของเบราว์เซอร์, iPhone แสดงวิธีเพิ่มลงหน้าจอโฮม)
+// ลงทะเบียน service worker + ปุ่มติดตั้งแอป (Chrome/Edge ใช้ prompt ของเบราว์เซอร์, เครื่องอื่นพาไปหน้า /install)
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 type Pwa = { canInstall: boolean; installed: boolean; isIOS: boolean; install: () => void; registration: ServiceWorkerRegistration | null };
@@ -16,8 +17,8 @@ export function PwaProvider({ children, userId }: { children: React.ReactNode; u
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [iosHelp, setIosHelp] = useState(false);
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -63,55 +64,25 @@ export function PwaProvider({ children, userId }: { children: React.ReactNode; u
       .catch(() => {});
   }, [registration, userId]);
 
+  // กดครั้งเดียวติดตั้งได้ (Chrome/Edge บน Android และคอม) — ที่เหลือพาไปหน้าวิธีติดตั้ง
   const install = useCallback(async () => {
     if (deferred) {
       await deferred.prompt();
       await deferred.userChoice.catch(() => null);
       setDeferred(null);
-    } else if (isIOS) setIosHelp(true);
-  }, [deferred, isIOS]);
+    } else {
+      router.push(isIOS ? "/install?os=ios" : "/install");
+    }
+  }, [deferred, isIOS, router]);
 
-  const canInstall = !installed && (!!deferred || isIOS);
+  const canInstall = !installed && !!deferred;
 
-  return (
-    <Ctx.Provider value={{ canInstall, installed, isIOS, install, registration }}>
-      {children}
-      {iosHelp && (
-        <div className="fixed inset-0 z-[90] grid place-items-end p-3 sm:place-items-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIosHelp(false)} />
-          <div className="glass animate-rise relative w-full max-w-sm rounded-3xl p-6">
-            <button onClick={() => setIosHelp(false)} className="btn btn-ghost absolute right-3 top-3 !p-2" aria-label="ปิด">
-              <X className="size-4" />
-            </button>
-            <h3 className="text-lg font-bold">ติดตั้งแอปบน iPhone / iPad</h3>
-            <ol className="mt-4 space-y-3 text-sm">
-              <li className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/10">
-                  <Share className="size-5 text-sky-300" />
-                </span>
-                เปิดเว็บนี้ใน Safari แล้วกดปุ่ม <b>แชร์</b> ด้านล่าง
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/10">
-                  <PlusSquare className="size-5 text-leaf" />
-                </span>
-                เลือก <b>เพิ่มไปยังหน้าจอโฮม</b> แล้วกด <b>เพิ่ม</b>
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/10">🔔</span>
-                เปิดแอปจากหน้าจอโฮม แล้วกดกระดิ่งเพื่อเปิดแจ้งเตือน
-              </li>
-            </ol>
-          </div>
-        </div>
-      )}
-    </Ctx.Provider>
-  );
+  return <Ctx.Provider value={{ canInstall, installed, isIOS, install, registration }}>{children}</Ctx.Provider>;
 }
 
 export function InstallButton({ className = "" }: { className?: string }) {
-  const { canInstall, install } = usePwa();
-  if (!canInstall) return null;
+  const { installed, install } = usePwa();
+  if (installed) return null;
   return (
     <button onClick={install} className={`btn btn-ghost !px-3 !py-2 text-sm ${className}`} title="ติดตั้งแอป">
       <Download className="size-4 text-leaf" />

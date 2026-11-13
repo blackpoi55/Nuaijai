@@ -67,7 +67,7 @@ export function Nav({ user, vapidKey }: { user: NavUser; vapidKey: string }) {
               </>
             ) : (
               <>
-                <InstallButton className="hidden sm:inline-flex" />
+                <InstallButton />
                 <CartButton className="hidden md:inline-flex" />
                 <Link href="/login" className="btn btn-ghost !py-2 text-sm">
                   เข้าสู่ระบบ

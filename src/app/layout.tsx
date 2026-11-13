@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { Prompt } from "next/font/google";
 import { CartProvider } from "@/components/cart";
 import { Nav } from "@/components/nav";
@@ -59,7 +60,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           )}
           <main className="overflow-x-clip pb-28 md:pb-12">{children}</main>
           <footer className="mx-auto hidden max-w-6xl px-4 pb-10 text-center text-xs text-dim md:block">
-            © {new Date().getFullYear()} เหนื่อยใจ · ราคา = Robux ÷ {st.robuxPerBaht} ปัดขึ้น · เติมด้วยซองอั่งเปา TrueMoney หรือพร้อมเพย์
+            © {new Date().getFullYear()} เหนื่อยใจ · ราคา = Robux ÷ {st.robuxPerBaht} ปัดขึ้น · เติมด้วยซองอั่งเปา TrueMoney หรือพร้อมเพย์{" "}
+            ·{" "}
+            <Link href="/install" className="text-leaf hover:underline">
+              ติดตั้งแอป
+            </Link>
           </footer>
         </CartProvider>
         </PwaProvider>
