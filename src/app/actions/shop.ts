@@ -1,10 +1,13 @@
 "use server";
 
 import { createHash } from "node:crypto";
-import { and, eq, gt, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, lt, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyAdmins } from "@/lib/notify";
 import { getDb, schema } from "@/db";
-import type { OrderItem } from "@/db/schema";
+import type { Coupon, OrderItem } from "@/db/schema";
+import { discountFor, findUsableCoupon } from "@/lib/coupons";
 import { getCurrentUser } from "@/lib/auth";
 import { newCode } from "@/lib/codes";
 import { cartBaht, formatBaht } from "@/lib/pricing";
@@ -42,7 +45,7 @@ export async function topupAction(_: TopupState, form: FormData): Promise<TopupS
   let topupId: number;
   const [inserted] = await db
     .insert(schema.topups)
-    .values({ userId: user.id, voucherHash: hash })
+    .values({ userId: user.id, voucherHash: hash, isTest: user.role === "admin" })
     .onConflictDoNothing()
     .returning({ id: schema.topups.id });
   if (inserted) {
@@ -95,6 +98,10 @@ export async function topupAction(_: TopupState, form: FormData): Promise<TopupS
   });
 
   revalidatePath("/", "layout");
+  if (user.role !== "admin")
+    after(() =>
+    notifyAdmins({ title: `💰 เติมซองอั่งเปา ฿${formatBaht(r.amount)}`, body: `${user.displayName}${r.sender ? ` (ผู้ส่ง ${r.sender})` : ""}`, url: "/admin/topups" }),
+  );
   return { ok: true, amount: r.amount, balance, message: `เติมสำเร็จ +${formatBaht(r.amount)} แต้ม` };
 }
 
@@ -133,14 +140,16 @@ export async function submitSlipAction(_: SlipState, form: FormData): Promise<Sl
     .limit(1);
   if (dup) return { ok: false, message: "สลิปนี้ถูกส่งเข้าระบบแล้ว" };
 
-  await db.insert(schema.slips).values({ userId: user.id, amount, imageData: image, imageHash });
+  const isTest = user.role === "admin"; // สลิปของแอดมิน = เทส ไม่นับรายได้
+  await db.insert(schema.slips).values({ userId: user.id, amount, imageData: image, imageHash, isTest });
   revalidatePath("/topup");
+  if (!isTest) after(() => notifyAdmins({ title: `🧾 สลิปพร้อมเพย์รอตรวจ ฿${formatBaht(amount)}`, body: `จาก ${user.displayName} • กดเพื่อตรวจ`, url: "/admin/slips", tag: "slip" }));
   return { ok: true, message: `ส่งสลิป ฿${formatBaht(amount)} แล้ว รอแอดมินตรวจ แต้มจะเข้าหลังอนุมัติ` };
 }
 
 // ---------------------------------------------------------------- ซื้อของในตะกร้า
 
-export type CheckoutInput = { items: { id: number; qty: number }[]; mode: "single" | "split" };
+export type CheckoutInput = { items: { id: number; qty: number }[]; mode: "single" | "split"; coupon?: string };
 export type CheckoutResult = { ok: true; orderId: number } | { ok: false; message: string; need?: number };
 
 export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResult> {
@@ -175,7 +184,20 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
   }
 
   const totalRobux = items.reduce((s, i) => s + i.priceRobux * i.qty, 0);
-  const totalBaht = cartBaht(totalRobux, st.robuxPerBaht);
+  const subtotalBaht = cartBaht(totalRobux, st.robuxPerBaht);
+
+  // คูปองส่วนลด (ถ้ามี): ตรวจก่อน แล้วจองสิทธิ์จริงใน transaction เดียวกับการตัดแต้ม
+  let coupon: Coupon | null = null;
+  let discountBaht = 0;
+  if (input?.coupon) {
+    const found = await findUsableCoupon(input.coupon, user.id);
+    if (!found.ok) return { ok: false, message: found.message };
+    if (found.coupon.kind !== "discount") return { ok: false, message: "คูปองนี้ให้แต้มฟรี ไปกรอกที่หน้าเติมแต้ม" };
+    if (subtotalBaht < found.coupon.minBaht) return { ok: false, message: `คูปองใช้ได้เมื่อยอดตั้งแต่ ฿${found.coupon.minBaht} ขึ้นไป` };
+    coupon = found.coupon;
+    discountBaht = discountFor(coupon, subtotalBaht);
+  }
+  const totalBaht = subtotalBaht - discountBaht;
   const cost = totalBaht * 100;
 
   // โค้ดที่จะออก
@@ -190,6 +212,8 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
         ]
       : items.flatMap((i) => Array.from({ length: i.qty }, () => ({ passKeys: [i.passKey], label: i.name })));
 
+  // คำสั่งซื้อของแอดมิน = เทส ไม่นับรายได้ และไม่แจ้งเตือน "ขายได้"
+  const isTest = user.role === "admin";
   try {
     const orderId = await db.transaction(async (tx) => {
       const [u] = await tx
@@ -200,10 +224,19 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
       if (!u) throw new Error("NOFUNDS");
       const [o] = await tx
         .insert(schema.orders)
-        .values({ userId: user.id, items, totalRobux, totalBaht, robuxPerBaht: st.robuxPerBaht, mode })
+        .values({ userId: user.id, items, totalRobux, totalBaht, subtotalBaht, discountBaht, couponId: coupon?.id ?? null, robuxPerBaht: st.robuxPerBaht, mode, isTest })
         .returning({ id: schema.orders.id });
+      if (coupon) {
+        const [took] = await tx
+          .update(schema.coupons)
+          .set({ usedCount: sql`${schema.coupons.usedCount} + 1` })
+          .where(and(eq(schema.coupons.id, coupon.id), eq(schema.coupons.active, true), lt(schema.coupons.usedCount, schema.coupons.maxUses)))
+          .returning({ id: schema.coupons.id });
+        if (!took) throw new Error("COUPON");
+        await tx.insert(schema.couponRedemptions).values({ couponId: coupon.id, userId: user.id, orderId: o.id, amount: discountBaht });
+      }
       await tx.insert(schema.codes).values(
-        bundles.map((b) => ({ code: newCode(), orderId: o.id, userId: user.id, passKeys: b.passKeys, label: b.label })),
+        bundles.map((b) => ({ code: newCode(), orderId: o.id, userId: user.id, passKeys: b.passKeys, label: b.label, isTest })),
       );
       await tx.insert(schema.pointLedger).values({
         userId: user.id,
@@ -211,13 +244,24 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
         balanceAfter: u.points,
         kind: "purchase",
         refId: o.id,
-        note: `คำสั่งซื้อ #${o.id}`,
+        note: coupon ? `คำสั่งซื้อ #${o.id} (คูปอง ${coupon.code} ลด ฿${discountBaht})` : `คำสั่งซื้อ #${o.id}`,
       });
       return o.id;
     });
     revalidatePath("/", "layout");
+    if (!isTest)
+      after(() =>
+      notifyAdmins({
+        title: `🛒 ขายได้ ฿${totalBaht.toLocaleString("th-TH")}`,
+        body: `${user.displayName}: ${items.map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(", ")}`.slice(0, 180),
+        url: "/admin/codes",
+      }),
+    );
     return { ok: true, orderId };
   } catch (e) {
+    if ((e instanceof Error && e.message === "COUPON") || String(e).includes("coupon_user_uq")) {
+      return { ok: false, message: "คูปองนี้ใช้ไม่ได้แล้ว (ครบจำนวนหรือคุณใช้ไปแล้ว)" };
+    }
     if (e instanceof Error && e.message === "NOFUNDS") {
       const [fresh] = await db.select({ points: schema.users.points }).from(schema.users).where(eq(schema.users.id, user.id));
       return { ok: false, message: "แต้มไม่พอ", need: Math.max(0, cost - (fresh?.points ?? 0)) };

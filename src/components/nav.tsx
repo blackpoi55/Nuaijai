@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Leaf, LogOut, Shield, ShoppingBag, Store, Ticket, User, Wallet } from "lucide-react";
+import { ChevronDown, LogOut, Shield, ShoppingBag, Store, Ticket, User, Wallet } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { formatBaht } from "@/lib/pricing";
+import { NotificationBell } from "./bell";
 import { CartButton, useCart } from "./cart";
+import { InstallButton } from "./pwa";
 
-type NavUser = { name: string; points: number; admin: boolean } | null;
+type NavUser = { name: string; points: number; admin: boolean; unread: number } | null;
 
 const LINKS = [
   { href: "/", label: "ร้านค้า", icon: Store },
@@ -19,9 +21,8 @@ const LINKS = [
 export function Logo() {
   return (
     <Link href="/" className="group flex items-center gap-2.5">
-      <span className="relative grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-emerald-300 via-cyan-300 to-violet-400 shadow-lg shadow-cyan-500/30 transition-transform group-hover:rotate-6">
-        <Leaf className="size-5 text-ink" strokeWidth={2.6} />
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icons/192.png" alt="" className="size-10 rounded-2xl shadow-lg shadow-amber-500/20 ring-1 ring-white/15 transition-transform group-hover:rotate-6" />
       <span className="leading-none">
         <span className="block text-lg font-extrabold tracking-tight">เหนื่อยใจ</span>
         <span className="text-shine block text-[10px] font-bold tracking-[0.3em]">PASS SHOP</span>
@@ -30,7 +31,7 @@ export function Logo() {
   );
 }
 
-export function Nav({ user }: { user: NavUser }) {
+export function Nav({ user, vapidKey }: { user: NavUser; vapidKey: string }) {
   const path = usePathname();
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
@@ -59,12 +60,15 @@ export function Nav({ user }: { user: NavUser }) {
                   <span className="hidden text-xs text-amber-200/70 sm:inline">แต้ม</span>
                   <span className="hidden rounded-lg bg-gold px-1.5 text-[11px] font-bold text-ink group-hover:inline sm:group-hover:inline">+ เติม</span>
                 </Link>
-                <CartButton />
+                <InstallButton className="hidden sm:inline-flex" />
+                <NotificationBell initialUnread={user.unread} vapidKey={vapidKey} />
+                <CartButton className="hidden md:inline-flex" />
                 <UserMenu user={user} />
               </>
             ) : (
               <>
-                <CartButton />
+                <InstallButton className="hidden sm:inline-flex" />
+                <CartButton className="hidden md:inline-flex" />
                 <Link href="/login" className="btn btn-ghost !py-2 text-sm">
                   เข้าสู่ระบบ
                 </Link>
@@ -123,7 +127,7 @@ function UserMenu({ user }: { user: NonNullable<NavUser> }) {
         <ChevronDown className={`hidden size-4 transition sm:block ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="glass animate-rise absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl p-1.5 shadow-2xl" style={{ animationDuration: ".2s" }}>
+        <div className="animate-rise absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-line bg-ink-2/[0.97] p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl" style={{ animationDuration: ".2s" }}>
           <div className="px-3 py-2">
             <p className="flex items-center gap-1.5 text-sm font-semibold">
               <User className="size-4 text-muted" /> {user.name}
@@ -132,6 +136,7 @@ function UserMenu({ user }: { user: NonNullable<NavUser> }) {
           <MenuLink href="/orders" icon={Ticket} label="โค้ดของฉัน" onClick={() => setOpen(false)} />
           <MenuLink href="/topup" icon={Wallet} label="เติมแต้ม / ประวัติ" onClick={() => setOpen(false)} />
           {user.admin && <MenuLink href="/admin" icon={Shield} label="หลังบ้านแอดมิน" onClick={() => setOpen(false)} />}
+          <InstallButton className="!w-full !justify-start !rounded-xl !border-0 !bg-transparent !px-3 hover:!bg-white/5 [&>span]:!inline" />
           <form action={logoutAction}>
             <button className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-danger hover:bg-white/5">
               <LogOut className="size-4" /> ออกจากระบบ

@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { CheckCircle2, Clock, History, Receipt, ShieldCheck, Wallet, XCircle } from "lucide-react";
 import { getDb, schema } from "@/db";
+import { CouponBox } from "@/components/coupon-box";
 import { TopupTabs } from "@/components/topup-tabs";
 import { requireUser } from "@/lib/auth";
 import { formatBaht } from "@/lib/pricing";
@@ -54,6 +55,7 @@ export default async function TopupPage() {
         </section>
 
         <div className="space-y-6">
+          <CouponBox />
           {/* สลิปของฉัน */}
           <section className="glass animate-rise rounded-[2rem] p-6" style={{ animationDelay: "80ms" }}>
             <h2 className="flex items-center gap-2 text-lg font-bold">
@@ -128,5 +130,5 @@ function SlipStatus({ s }: { s: string }) {
 }
 
 function kindLabel(k: string) {
-  return { topup: "เติมแต้ม", purchase: "ซื้อพาส", admin: "แอดมินปรับแต้ม", refund: "คืนแต้ม" }[k] ?? k;
+  return { topup: "เติมแต้ม", purchase: "ซื้อพาส", admin: "แอดมินปรับแต้ม", refund: "คืนแต้ม", coupon: "คูปอง" }[k] ?? k;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { adjustPointsAction, resetPasswordAction, setUserFlagsAction } from "@/app/actions/admin";
+import { adjustPointsAction, resetPasswordAction, setUserFlagsAction, unlockUserAction } from "@/app/actions/admin";
 
 const MODES = [
   { id: "add", label: "เติมแต้ม", hint: "แจกหรือเติมให้ เช่น เติมแทนลูกค้า ของรางวัล", btn: "btn-primary" },
@@ -82,4 +82,29 @@ export function FlagButtons({ id, banned, admin }: { id: number; banned: boolean
 function Msg({ s }: { s: { ok?: string; error?: string } | undefined }) {
   if (!s) return null;
   return <p className={`text-sm ${s.ok ? "text-leaf" : "text-danger"}`}>{s.ok ?? s.error}</p>;
+}
+
+export function UnlockBanner({ id, minutes, fails }: { id: number; minutes: number | null; fails: number }) {
+  const [pending, start] = useTransition();
+  const [done, setDone] = useState(false);
+  if (done) return <p className="mb-4 rounded-2xl border border-leaf/30 bg-leaf/10 px-4 py-3 text-sm font-semibold text-leaf">ปลดล็อกแล้ว ผู้ใช้เข้าสู่ระบบได้ทันที</p>;
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/30 bg-gold/10 px-4 py-3">
+      <p className="text-sm font-semibold text-gold">
+        {minutes !== null ? `🔒 บัญชีถูกล็อกเพราะใส่รหัสผิดหลายครั้ง (เหลืออีก ${minutes} นาที)` : `⚠ ใส่รหัสผิดติดกัน ${fails} ครั้ง (ครบ 5 จะถูกล็อก)`}
+      </p>
+      <button
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            await unlockUserAction(id);
+            setDone(true);
+          })
+        }
+        className="btn btn-gold !py-2 text-sm"
+      >
+        {pending ? "กำลังปลดล็อก..." : minutes !== null ? "ปลดล็อกเลย" : "ล้างตัวนับ"}
+      </button>
+    </div>
+  );
 }

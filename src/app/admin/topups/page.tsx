@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { formatBaht } from "@/lib/pricing";
 import { PageTitle, Status, Table, thaiDate } from "../ui";
@@ -13,7 +13,7 @@ export default async function AdminTopups({ searchParams }: { searchParams: Prom
     .select({ t: schema.topups, u: schema.users.displayName })
     .from(schema.topups)
     .innerJoin(schema.users, eq(schema.topups.userId, schema.users.id))
-    .where(status ? eq(schema.topups.status, status) : undefined)
+    .where(and(eq(schema.topups.isTest, false), status ? eq(schema.topups.status, status) : undefined))
     .orderBy(desc(schema.topups.id))
     .limit(200);
   const tabs = [

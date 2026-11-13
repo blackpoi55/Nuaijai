@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useTransition } from "react";
-import { Gift, Minus, Plus, ShoppingBag, Sparkles, Ticket, Trash2, Wallet, X } from "lucide-react";
+import { Gift, Minus, Plus, ShoppingBag, Sparkles, Ticket, TicketPercent, Trash2, Wallet, X } from "lucide-react";
+import { checkDiscountCouponAction } from "@/app/actions/coupon";
 import { checkoutAction } from "@/app/actions/shop";
 import type { PublicProduct } from "@/lib/products";
 import { cartBaht, formatBaht, formatNumber } from "@/lib/pricing";
@@ -165,12 +166,36 @@ function CartDrawer() {
   const [mode, setMode] = useState<Mode>("single");
   const [err, setErr] = useState<{ text: string; need?: number } | null>(null);
   const [pending, start] = useTransition();
+  const [couponText, setCouponText] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; discountBaht: number; label: string } | null>(null);
+  const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  const [checking, startCheck] = useTransition();
 
   const lines = c.products.filter((p) => c.qty[p.id]);
   const hasMulti = lines.some((p) => p.kind === "pass" && c.qty[p.id] > 1);
   const effMode: Mode = hasMulti ? "split" : mode;
   const codeCount = effMode === "single" ? (lines.length ? 1 : 0) : c.count;
-  const cost = c.totalBaht * 100;
+  const discount = coupon ? Math.min(coupon.discountBaht, c.totalBaht) : 0;
+  const payBaht = c.totalBaht - discount;
+  const cost = payBaht * 100;
+
+  const applyCoupon = (code: string) => {
+    setCouponMsg(null);
+    startCheck(async () => {
+      const r = await checkDiscountCouponAction(code, c.totalBaht);
+      if (r.ok) setCoupon({ code: r.code, discountBaht: r.discountBaht, label: r.label });
+      else {
+        setCoupon(null);
+        setCouponMsg(r.message);
+      }
+    });
+  };
+
+  // ยอดในตะกร้าเปลี่ยน = คิดส่วนลดใหม่
+  useEffect(() => {
+    if (coupon && c.totalBaht > 0) applyCoupon(coupon.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.totalBaht]);
   const short = Math.max(0, cost - c.points);
 
   useEffect(() => {
@@ -181,9 +206,11 @@ function CartDrawer() {
   const checkout = () => {
     setErr(null);
     start(async () => {
-      const r = await checkoutAction({ items: lines.map((p) => ({ id: p.id, qty: c.qty[p.id] })), mode: effMode });
+      const r = await checkoutAction({ items: lines.map((p) => ({ id: p.id, qty: c.qty[p.id] })), mode: effMode, coupon: coupon?.code });
       if (r.ok) {
         c.clear();
+        setCoupon(null);
+        setCouponText("");
         c.setOpen(false);
         router.push(`/orders/${r.orderId}?new=1`);
         router.refresh();
@@ -271,13 +298,53 @@ function CartDrawer() {
               <Row label="รวม Robux" value={`${formatNumber(c.totalRobux)} R$`} />
               <Row label={`÷ ${c.rate} แล้วปัดขึ้น`} value={`${(c.totalRobux / c.rate).toLocaleString("th-TH", { maximumFractionDigits: 2 })} → ${formatNumber(c.totalBaht)}`} />
               <Row label="จะได้โค้ด" value={`${codeCount} ใบ`} />
+              {coupon && (
+                <div className="flex items-center justify-between text-leaf">
+                  <span className="flex items-center gap-1.5">
+                    <TicketPercent className="size-4" /> คูปอง {coupon.code} ({coupon.label})
+                  </span>
+                  <span className="font-semibold tabular-nums">−฿{formatNumber(discount)}</span>
+                </div>
+              )}
               <div className="flex items-end justify-between pt-2">
                 <span className="text-muted">ยอดชำระ</span>
-                <span className="text-3xl font-extrabold">
-                  <span className="text-gradient">฿{formatNumber(c.totalBaht)}</span>
+                <span className="text-right">
+                  {discount > 0 && <span className="mr-2 text-sm text-dim line-through">฿{formatNumber(c.totalBaht)}</span>}
+                  <span className="text-gradient text-3xl font-extrabold">฿{formatNumber(payBaht)}</span>
                 </span>
               </div>
             </div>
+
+            {c.signedIn &&
+              (coupon ? (
+                <button onClick={() => setCoupon(null)} className="w-full text-right text-xs text-muted hover:text-fg">
+                  เอาคูปองออก
+                </button>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (couponText.trim()) applyCoupon(couponText);
+                  }}
+                  className="space-y-1"
+                >
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <TicketPercent className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-dim" />
+                      <input
+                        value={couponText}
+                        onChange={(e) => setCouponText(e.target.value.toUpperCase())}
+                        placeholder="มีโค้ดส่วนลด? กรอกตรงนี้"
+                        className="input !py-2 !pl-9 text-sm uppercase"
+                      />
+                    </div>
+                    <button disabled={checking || !couponText.trim()} className="btn btn-ghost !px-3 !py-2 text-sm">
+                      {checking ? "..." : "ใช้"}
+                    </button>
+                  </div>
+                  {couponMsg && <p className="text-xs text-danger">{couponMsg}</p>}
+                </form>
+              ))}
 
             {c.signedIn && (
               <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-sm">
@@ -306,7 +373,7 @@ function CartDrawer() {
             ) : (
               <button onClick={checkout} disabled={pending} className="btn btn-primary w-full !py-3.5 text-base">
                 <Sparkles className="size-5" />
-                {pending ? "กำลังสั่งซื้อ..." : `ซื้อเลย ใช้ ${formatNumber(c.totalBaht)} แต้ม`}
+                {pending ? "กำลังสั่งซื้อ..." : `ซื้อเลย ใช้ ${formatNumber(payBaht)} แต้ม`}
               </button>
             )}
           </footer>

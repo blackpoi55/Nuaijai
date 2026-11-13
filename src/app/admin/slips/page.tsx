@@ -18,6 +18,7 @@ export default async function AdminSlips({ searchParams }: { searchParams: Promi
       amount: schema.slips.amount,
       imageHash: schema.slips.imageHash,
       status: schema.slips.status,
+      isTest: schema.slips.isTest,
       note: schema.slips.note,
       createdAt: schema.slips.createdAt,
       reviewedAt: schema.slips.reviewedAt,
@@ -78,6 +79,7 @@ export default async function AdminSlips({ searchParams }: { searchParams: Promi
               </p>
               <p className="text-xs text-dim">ส่ง {thaiDate.format(r.createdAt)}</p>
               {r.reviewedAt && <p className="text-xs text-dim">ตรวจ {thaiDate.format(r.reviewedAt)}</p>}
+              {r.isTest && <p className="chip border-grape/30 bg-grape/10 text-grape">เทสของแอดมิน • ไม่นับรายได้</p>}
               {(dup.get(r.imageHash) ?? 0) > 1 && <p className="chip border-danger/30 bg-danger/10 text-danger">⚠ รูปซ้ำกับสลิปอื่น</p>}
               {r.note && <p className="text-xs text-danger">{r.note}</p>}
               {r.status === "pending" && <SlipActions id={r.id} amount={r.amount / 100} />}

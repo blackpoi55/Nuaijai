@@ -9,6 +9,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // เงินและแต้มเก็บเป็น "สตางค์" (จำนวนเต็ม) เสมอ เพราะซองอั่งเปามีเศษสตางค์ได้ — 1 แต้ม = 1 บาท = 100 สตางค์
@@ -23,6 +24,10 @@ export const users = pgTable("users", {
   banned: boolean("banned").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  // กันเดารหัส: ผิดติดกันกี่ครั้ง / ล็อกถึงเมื่อไร (เก็บในฐานข้อมูล ใช้ได้ทุกเซิร์ฟเวอร์)
+  failedLogins: integer("failed_logins").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  signupIp: text("signup_ip"), // sha256 ของ IP (ไม่เก็บ IP จริง)
 });
 
 export const sessions = pgTable(
@@ -73,6 +78,8 @@ export const topups = pgTable(
     providerCode: text("provider_code"),
     message: text("message"),
     senderName: text("sender_name"),
+    // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
+    isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
@@ -97,9 +104,14 @@ export const orders = pgTable(
       .references(() => users.id),
     items: jsonb("items").$type<OrderItem[]>().notNull(),
     totalRobux: integer("total_robux").notNull(),
-    totalBaht: integer("total_baht").notNull(),
+    totalBaht: integer("total_baht").notNull(), // บาทที่จ่ายจริง (หลังหักส่วนลด)
+    subtotalBaht: integer("subtotal_baht"), // ก่อนหักส่วนลด
+    discountBaht: integer("discount_baht").notNull().default(0),
+    couponId: integer("coupon_id"),
     robuxPerBaht: integer("robux_per_baht").notNull(),
     mode: text("mode", { enum: ["single", "split"] }).notNull(),
+    // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
+    isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("orders_user_idx").on(t.userId), index("orders_created_idx").on(t.createdAt)],
@@ -120,7 +132,11 @@ export const codes = pgTable(
     label: text("label").notNull(),
     status: text("status", { enum: ["active", "used", "revoked"] }).notNull().default("active"),
     usedByRobloxId: bigint("used_by_roblox_id", { mode: "number" }),
+    usedByName: text("used_by_name"), // Roblox username (@ชื่อ)
+    usedByDisplayName: text("used_by_display_name"), // ชื่อที่แสดงในเกม
     usedAt: timestamp("used_at", { withTimezone: true }),
+    // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
+    isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("codes_user_idx").on(t.userId), index("codes_order_idx").on(t.orderId)],
@@ -140,10 +156,87 @@ export const slips = pgTable(
     status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
     note: text("note"), // เหตุผลที่ปฏิเสธ
     adminId: integer("admin_id"),
+    // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
+    isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   },
   (t) => [index("slips_user_idx").on(t.userId), index("slips_status_idx").on(t.status), index("slips_hash_idx").on(t.imageHash)],
+);
+
+// แจ้งเตือนในเว็บ (กระดิ่ง) — ส่ง Web Push ไปด้วยถ้าเครื่องนั้นเปิดรับไว้
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    url: text("url").notNull().default("/"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.id)],
+);
+
+// เครื่องที่เปิดรับ Web Push (หนึ่งคนมีได้หลายเครื่อง)
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("push_user_idx").on(t.userId)],
+);
+
+// คูปองที่แอดมินแจก: points = ได้แต้มฟรี (กรอกหน้าเติมแต้ม) • discount = ส่วนลดตอนซื้อ (กรอกในตะกร้า)
+export const coupons = pgTable(
+  "coupons",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull().unique(), // ตัวพิมพ์ใหญ่ ไม่มีช่องว่าง
+    kind: text("kind", { enum: ["points", "discount"] }).notNull(),
+    points: integer("points").notNull().default(0), // สตางค์ (แบบ points)
+    discountType: text("discount_type", { enum: ["percent", "baht"] }), // แบบ discount
+    discountValue: integer("discount_value").notNull().default(0), // % หรือ บาท
+    minBaht: integer("min_baht").notNull().default(0), // ยอดขั้นต่ำ (แบบ discount)
+    maxUses: integer("max_uses").notNull().default(1), // ใช้ได้กี่ครั้งรวม (คนละครั้ง)
+    usedCount: integer("used_count").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    active: boolean("active").notNull().default(true),
+    batch: text("batch").notNull(), // ชุดที่สร้างพร้อมกัน
+    note: text("note").notNull().default(""),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("coupons_batch_idx").on(t.batch)],
+);
+
+export const couponRedemptions = pgTable(
+  "coupon_redemptions",
+  {
+    id: serial("id").primaryKey(),
+    couponId: integer("coupon_id")
+      .notNull()
+      .references(() => coupons.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    orderId: integer("order_id"),
+    amount: integer("amount").notNull(), // แต้มที่ได้ (สตางค์) หรือ ส่วนลด (บาท)
+    ip: text("ip"), // sha256 ของ IP: คูปองเดียวกันใช้ซ้ำจาก IP เดิมไม่ได้
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("coupon_user_uq").on(t.couponId, t.userId), index("coupon_ip_idx").on(t.couponId, t.ip)], // คนละครั้ง
 );
 
 // ทุกการเปลี่ยนแต้ม (เติม ซื้อ แอดมินปรับ คืนเงิน) — ใช้ตรวจย้อนหลัง
@@ -156,7 +249,7 @@ export const pointLedger = pgTable(
       .references(() => users.id),
     delta: integer("delta").notNull(), // สตางค์ (+/-)
     balanceAfter: integer("balance_after").notNull(),
-    kind: text("kind", { enum: ["topup", "purchase", "admin", "refund"] }).notNull(),
+    kind: text("kind", { enum: ["topup", "purchase", "admin", "refund", "coupon"] }).notNull(),
     note: text("note"),
     refId: integer("ref_id"),
     adminId: integer("admin_id"),
@@ -177,3 +270,4 @@ export type Code = typeof codes.$inferSelect;
 export type Topup = typeof topups.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Slip = typeof slips.$inferSelect;
+export type Coupon = typeof coupons.$inferSelect;

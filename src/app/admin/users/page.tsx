@@ -24,6 +24,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
               {u.displayName}
               {u.role === "admin" && <span className="chip ml-2 text-grape">แอดมิน</span>}
               {u.banned && <span className="chip ml-2 text-danger">ระงับ</span>}
+              {u.lockedUntil && u.lockedUntil > new Date() && <span className="chip ml-2 text-gold">🔒 ล็อก</span>}
             </td>
             <td className="tabular-nums text-gold">{formatBaht(u.points)}</td>
             <td className="text-xs text-muted">{thaiDate.format(u.createdAt)}</td>

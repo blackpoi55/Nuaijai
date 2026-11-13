@@ -2,10 +2,13 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyUser } from "@/lib/notify";
 import { getDb, schema } from "@/db";
 import type { Perk } from "@/db/schema";
 import { hashPassword, requireAdmin } from "@/lib/auth";
 import { saveSettings } from "@/lib/settings";
+import { normalizeCoupon, randomCoupon } from "@/lib/coupons";
 
 export type AdminState = { ok?: string; error?: string } | undefined;
 
@@ -131,6 +134,13 @@ export async function adjustPointsAction(_: AdminState, f: FormData): Promise<Ad
   });
   if (balance === null) return { error: "หักแต้มเกินที่มีไม่ได้" };
   revalidatePath("/admin", "layout");
+  after(() =>
+    notifyUser(userId, {
+      title: `${mode === "deduct" ? "➖" : mode === "refund" ? "↩️" : "🎁"} ${label} ${mode === "deduct" ? "−" : "+"}${baht.toLocaleString("th-TH")} แต้ม`,
+      body: `${reason ? reason + " • " : ""}คงเหลือ ${(balance / 100).toLocaleString("th-TH")} แต้ม`,
+      url: "/topup",
+    }),
+  );
   return { ok: `${label} ${baht.toLocaleString("th-TH")} แต้มแล้ว • คงเหลือ ${(balance / 100).toLocaleString("th-TH")}` };
 }
 
@@ -140,7 +150,7 @@ export async function resetPasswordAction(_: AdminState, f: FormData): Promise<A
   const pw = str(f, "password");
   if (pw.length < 6) return { error: "รหัสผ่านใหม่อย่างน้อย 6 ตัว" };
   const db = await getDb();
-  await db.update(schema.users).set({ passwordHash: await hashPassword(pw) }).where(eq(schema.users.id, userId));
+  await db.update(schema.users).set({ passwordHash: await hashPassword(pw), failedLogins: 0, lockedUntil: null }).where(eq(schema.users.id, userId));
   await db.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
   return { ok: "ตั้งรหัสผ่านใหม่แล้ว (ออกจากระบบทุกเครื่อง)" };
 }
@@ -159,6 +169,7 @@ export async function setUserFlagsAction(userId: number, patch: { banned?: boole
 export async function revokeCodeAction(codeId: number, refund: boolean) {
   const admin = await requireAdmin();
   const db = await getDb();
+  let refunded: { userId: number; amount: number; label: string } | null = null;
   await db.transaction(async (tx) => {
     const [c] = await tx
       .update(schema.codes)
@@ -186,8 +197,13 @@ export async function revokeCodeAction(codeId: number, refund: boolean) {
       refId: c.id,
       adminId: admin.id,
     });
+    refunded = { userId: c.userId, amount, label: c.label };
   });
   revalidatePath("/admin/codes");
+  if (refunded) {
+    const r = refunded as { userId: number; amount: number; label: string };
+    after(() => notifyUser(r.userId, { title: `↩️ คืนแต้ม +${(r.amount / 100).toLocaleString("th-TH")} แต้ม`, body: `ยกเลิกโค้ด ${r.label}`, url: "/topup" }));
+  }
 }
 
 // ---------------------------------------------------------------- ซองที่ค้าง
@@ -199,23 +215,25 @@ export async function resolveTopupAction(_: AdminState, f: FormData): Promise<Ad
   if (!(baht > 0)) return { error: "ใส่ยอดเงินที่ได้รับจริง" };
   const amount = Math.round(baht * 100);
   const db = await getDb();
-  const ok = await db.transaction(async (tx) => {
+  const target = await db.transaction(async (tx) => {
     const [t] = await tx
       .update(schema.topups)
       .set({ status: "success", amount, message: `แอดมินยืนยัน (${admin.displayName})`, finishedAt: new Date() })
       .where(and(eq(schema.topups.id, id), sql`${schema.topups.status} <> 'success'`))
       .returning();
-    if (!t) return false;
+    if (!t) return null;
     const [u] = await tx
       .update(schema.users)
       .set({ points: sql`${schema.users.points} + ${amount}` })
       .where(eq(schema.users.id, t.userId))
       .returning({ points: schema.users.points });
     await tx.insert(schema.pointLedger).values({ userId: t.userId, delta: amount, balanceAfter: u.points, kind: "topup", note: "ซองอั่งเปา (แอดมินยืนยัน)", refId: t.id, adminId: admin.id });
-    return true;
+    return t.userId;
   });
   revalidatePath("/admin/topups");
-  return ok ? { ok: "เติมแต้มให้แล้ว" } : { error: "ซองนี้สำเร็จไปแล้ว" };
+  if (!target) return { error: "ซองนี้สำเร็จไปแล้ว" };
+  after(() => notifyUser(target, { title: `✅ เติมแต้มสำเร็จ +${baht.toLocaleString("th-TH")} แต้ม`, body: "แอดมินยืนยันซองอั่งเปาให้แล้ว", url: "/topup" }));
+  return { ok: "เติมแต้มให้แล้ว" };
 }
 
 // ---------------------------------------------------------------- สลิปพร้อมเพย์
@@ -227,23 +245,27 @@ export async function approveSlipAction(_: AdminState, f: FormData): Promise<Adm
   if (!(baht > 0) || baht > 100000) return { error: "ใส่ยอดที่ได้รับจริง" };
   const amount = Math.round(baht * 100);
   const db = await getDb();
-  const ok = await db.transaction(async (tx) => {
+  const who = await db.transaction(async (tx) => {
     const [s] = await tx
       .update(schema.slips)
       .set({ status: "approved", amount, adminId: admin.id, reviewedAt: new Date(), note: null })
       .where(and(eq(schema.slips.id, id), eq(schema.slips.status, "pending")))
       .returning({ userId: schema.slips.userId });
-    if (!s) return false;
+    if (!s) return null;
     const [u] = await tx
       .update(schema.users)
       .set({ points: sql`${schema.users.points} + ${amount}` })
       .where(eq(schema.users.id, s.userId))
       .returning({ points: schema.users.points });
     await tx.insert(schema.pointLedger).values({ userId: s.userId, delta: amount, balanceAfter: u.points, kind: "topup", note: "พร้อมเพย์ (สลิป)", refId: id, adminId: admin.id });
-    return true;
+    return { userId: s.userId, balance: u.points };
   });
   revalidatePath("/admin", "layout");
-  return ok ? { ok: "อนุมัติแล้ว แต้มเข้าแล้ว" } : { error: "สลิปนี้ถูกตรวจไปแล้ว" };
+  if (!who) return { error: "สลิปนี้ถูกตรวจไปแล้ว" };
+  after(() =>
+    notifyUser(who.userId, { title: `✅ เติมแต้มสำเร็จ +${(amount / 100).toLocaleString("th-TH")} แต้ม`, body: `แอดมินอนุมัติสลิปพร้อมเพย์แล้ว • คงเหลือ ${(who.balance / 100).toLocaleString("th-TH")} แต้ม`, url: "/topup" }),
+  );
+  return { ok: "อนุมัติแล้ว แต้มเข้าแล้ว" };
 }
 
 export async function rejectSlipAction(_: AdminState, f: FormData): Promise<AdminState> {
@@ -255,9 +277,11 @@ export async function rejectSlipAction(_: AdminState, f: FormData): Promise<Admi
     .update(schema.slips)
     .set({ status: "rejected", note, adminId: admin.id, reviewedAt: new Date() })
     .where(and(eq(schema.slips.id, id), eq(schema.slips.status, "pending")))
-    .returning({ id: schema.slips.id });
+    .returning({ id: schema.slips.id, userId: schema.slips.userId, amount: schema.slips.amount });
   revalidatePath("/admin", "layout");
-  return s ? { ok: "ปฏิเสธแล้ว" } : { error: "สลิปนี้ถูกตรวจไปแล้ว" };
+  if (!s) return { error: "สลิปนี้ถูกตรวจไปแล้ว" };
+  after(() => notifyUser(s.userId, { title: `❌ สลิป ฿${(s.amount / 100).toLocaleString("th-TH")} ไม่ผ่าน`, body: note, url: "/topup" }));
+  return { ok: "ปฏิเสธแล้ว" };
 }
 
 // ---------------------------------------------------------------- ตั้งค่า
@@ -276,4 +300,81 @@ export async function saveSettingsAction(_: AdminState, f: FormData): Promise<Ad
   });
   revalidatePath("/", "layout");
   return { ok: "บันทึกแล้ว" };
+}
+
+// ---------------------------------------------------------------- คูปอง
+
+export async function createCouponsAction(_: AdminState, f: FormData): Promise<AdminState & { codes?: string[] }> {
+  const admin = await requireAdmin();
+  const kind: "points" | "discount" = f.get("kind") === "discount" ? "discount" : "points";
+  const custom = normalizeCoupon(str(f, "custom") || null);
+  const quantity = custom ? 1 : Math.min(500, Math.max(1, int(f, "quantity") || 1));
+  const maxUses = Math.min(100000, Math.max(1, int(f, "maxUses") || 1));
+  const prefix = str(f, "prefix").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+  const expRaw = str(f, "expiresAt");
+  const expiresAt = expRaw ? new Date(`${expRaw}:00+07:00`) : null;
+  const note = str(f, "note").slice(0, 200);
+  if (str(f, "custom") && !custom) return { error: "โค้ดที่ตั้งเอง ใช้ได้แค่ A-Z 0-9 - _ ยาว 3–32 ตัว" };
+
+  let points = 0;
+  let discountType: "percent" | "baht" | null = null;
+  let discountValue = 0;
+  let minBaht = 0;
+  if (kind === "points") {
+    const baht = Number(f.get("points"));
+    if (!(baht > 0) || baht > 100000) return { error: "ใส่จำนวนแต้มที่ได้" };
+    points = Math.round(baht * 100);
+  } else {
+    discountType = f.get("discountType") === "baht" ? "baht" : "percent";
+    discountValue = int(f, "discountValue");
+    if (!(discountValue > 0) || (discountType === "percent" && discountValue > 100)) return { error: "ใส่ส่วนลด (% ไม่เกิน 100)" };
+    minBaht = Math.max(0, int(f, "minBaht") || 0);
+  }
+
+  const batch = `${Date.now().toString(36)}${randomCoupon().slice(0, 4)}`.toLowerCase();
+  const db = await getDb();
+  const codes = new Set<string>();
+  if (custom) codes.add(custom);
+  while (codes.size < quantity) codes.add(randomCoupon(prefix));
+  try {
+    await db.insert(schema.coupons).values(
+      [...codes].map((code) => ({ code, kind, points, discountType, discountValue, minBaht, maxUses, expiresAt, batch, note, createdBy: admin.id })),
+    );
+  } catch (e) {
+    if (String(e).includes("unique")) return { error: custom ? "มีคูปองชื่อนี้อยู่แล้ว" : "สุ่มโค้ดชนกัน ลองกดสร้างใหม่" };
+    throw e;
+  }
+  revalidatePath("/admin/coupons");
+  return { ok: `สร้างคูปอง ${codes.size} โค้ดแล้ว`, codes: [...codes] };
+}
+
+export async function toggleCouponAction(id: number, active: boolean) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.update(schema.coupons).set({ active }).where(eq(schema.coupons.id, id));
+  revalidatePath("/admin/coupons");
+}
+
+export async function toggleCouponBatchAction(batch: string, active: boolean) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.update(schema.coupons).set({ active }).where(eq(schema.coupons.batch, batch));
+  revalidatePath("/admin/coupons");
+}
+
+/** ลบได้เฉพาะโค้ดที่ยังไม่มีใครใช้ */
+export async function deleteUnusedCouponsAction(batch: string) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.delete(schema.coupons).where(and(eq(schema.coupons.batch, batch), eq(schema.coupons.usedCount, 0)));
+  revalidatePath("/admin/coupons");
+}
+
+/** ปลดล็อกบัญชีที่ใส่รหัสผิดหลายครั้ง (ไม่ต้องเปลี่ยนรหัส) */
+export async function unlockUserAction(userId: number) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.update(schema.users).set({ failedLogins: 0, lockedUntil: null }).where(eq(schema.users.id, userId));
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
 }

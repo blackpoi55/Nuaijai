@@ -6,7 +6,7 @@ import { getDb, schema } from "@/db";
 import { prettyCode } from "@/lib/codes";
 import { formatBaht } from "@/lib/pricing";
 import { PageTitle, StatTile, Status, Table, thaiDate } from "../../ui";
-import { AdjustForm, FlagButtons, ResetForm } from "./forms";
+import { AdjustForm, FlagButtons, ResetForm, UnlockBanner } from "./forms";
 
 export default async function AdminUser({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,10 +25,14 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
         <ArrowLeft className="size-4" /> ผู้ใช้ทั้งหมด
       </Link>
       <PageTitle title={u.displayName} sub={`#${u.id} · สมัคร ${thaiDate.format(u.createdAt)}`} right={<FlagButtons id={u.id} banned={u.banned} admin={u.role === "admin"} />} />
+      {(() => {
+        const lockedMin = u.lockedUntil && u.lockedUntil > new Date() ? Math.ceil((u.lockedUntil.getTime() - Date.now()) / 60_000) : null;
+        return lockedMin !== null || u.failedLogins > 0 ? <UnlockBanner id={u.id} minutes={lockedMin} fails={u.failedLogins} /> : null;
+      })()}
       <div className="grid gap-3 sm:grid-cols-3">
         <StatTile label="แต้มคงเหลือ" value={formatBaht(u.points)} />
         <StatTile label="โค้ดทั้งหมด" value={String(codes.length)} hint={`ยังไม่ใช้ ${codes.filter((c) => c.status === "active").length}`} />
-        <StatTile label="สถานะ" value={u.banned ? "ระงับ" : u.role === "admin" ? "แอดมิน" : "ปกติ"} />
+        <StatTile label="สถานะ" value={u.banned ? "ระงับ" : u.lockedUntil && u.lockedUntil > new Date() ? "🔒 ถูกล็อก" : u.role === "admin" ? "แอดมิน" : "ปกติ"} />
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <AdjustForm userId={u.id} />
@@ -40,7 +44,7 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
         {ledger.map((l) => (
           <tr key={l.id}>
             <td className="text-xs text-muted">{thaiDate.format(l.createdAt)}</td>
-            <td>{({ topup: "เติม", purchase: "ซื้อ", admin: "แอดมิน", refund: "คืนแต้ม" } as Record<string, string>)[l.kind] ?? l.kind}</td>
+            <td>{({ topup: "เติม", purchase: "ซื้อ", admin: "แอดมิน", refund: "คืนแต้ม", coupon: "คูปอง" } as Record<string, string>)[l.kind] ?? l.kind}</td>
             <td>{l.note}</td>
             <td className={`tabular-nums ${l.delta >= 0 ? "text-leaf" : "text-rose"}`}>
               {l.delta >= 0 ? "+" : "−"}

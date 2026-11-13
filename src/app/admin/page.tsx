@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { formatBaht, formatNumber } from "@/lib/pricing";
 import { PageTitle, StatTile, Status, Table, thaiDate } from "./ui";
@@ -21,9 +21,9 @@ export default async function AdminHome() {
     const since = from ?? new Date(0);
     const res = await db.execute<{ v: number; n: number }>(sql`
       select coalesce(sum(a), 0)::int as v, count(*)::int as n from (
-        select ${schema.topups.amount} as a from ${schema.topups} where ${schema.topups.status} = 'success' and ${schema.topups.createdAt} >= ${since}
+        select ${schema.topups.amount} as a from ${schema.topups} where ${schema.topups.status} = 'success' and not ${schema.topups.isTest} and ${schema.topups.createdAt} >= ${since}
         union all
-        select ${schema.slips.amount} from ${schema.slips} where ${schema.slips.status} = 'approved' and ${schema.slips.reviewedAt} >= ${since}
+        select ${schema.slips.amount} from ${schema.slips} where ${schema.slips.status} = 'approved' and not ${schema.slips.isTest} and ${schema.slips.reviewedAt} >= ${since}
       ) t`);
     return res.rows as { v: number; n: number }[];
   };
@@ -31,7 +31,7 @@ export default async function AdminHome() {
     db
       .select({ v: sql<number>`coalesce(sum(${schema.orders.totalBaht}),0)::int`, n: sql<number>`count(*)::int` })
       .from(schema.orders)
-      .where(from ? gte(schema.orders.createdAt, from) : undefined);
+      .where(and(eq(schema.orders.isTest, false), from ? gte(schema.orders.createdAt, from) : undefined));
 
   const [[tToday], [tWeek], [tAll], [sToday], [sWeek], [users], [codeStats], recentTopups, recentOrders, recentOrderItems] = await Promise.all([
     sumTopup(today),
@@ -39,26 +39,33 @@ export default async function AdminHome() {
     sumTopup(),
     sumSales(today),
     sumSales(week),
-    db.select({ n: sql<number>`count(*)::int`, pts: sql<number>`coalesce(sum(${schema.users.points}),0)::int` }).from(schema.users),
+    // ไม่นับแอดมิน (แต้มเทส)
+    db
+      .select({ n: sql<number>`count(*)::int`, pts: sql<number>`coalesce(sum(${schema.users.points}),0)::int` })
+      .from(schema.users)
+      .where(eq(schema.users.role, "user")),
     db
       .select({
         active: sql<number>`count(*) filter (where ${schema.codes.status} = 'active')::int`,
         used: sql<number>`count(*) filter (where ${schema.codes.status} = 'used')::int`,
       })
-      .from(schema.codes),
+      .from(schema.codes)
+      .where(eq(schema.codes.isTest, false)),
     db
       .select({ t: schema.topups, u: schema.users.displayName })
       .from(schema.topups)
       .innerJoin(schema.users, eq(schema.topups.userId, schema.users.id))
+      .where(eq(schema.topups.isTest, false))
       .orderBy(desc(schema.topups.id))
       .limit(8),
     db
       .select({ o: schema.orders, u: schema.users.displayName })
       .from(schema.orders)
       .innerJoin(schema.users, eq(schema.orders.userId, schema.users.id))
+      .where(eq(schema.orders.isTest, false))
       .orderBy(desc(schema.orders.id))
       .limit(8),
-    db.select({ items: schema.orders.items }).from(schema.orders).where(gte(schema.orders.createdAt, startOfBangkokDay(29))),
+    db.select({ items: schema.orders.items }).from(schema.orders).where(and(eq(schema.orders.isTest, false), gte(schema.orders.createdAt, startOfBangkokDay(29)))),
   ]);
 
   // ขายดี 30 วัน
@@ -74,13 +81,21 @@ export default async function AdminHome() {
 
   return (
     <div>
-      <PageTitle title="ภาพรวมร้าน" sub="ตัวเลขทั้งหมดเป็นเวลาไทย" />
+      <PageTitle
+        title="ภาพรวมร้าน"
+        sub="เวลาไทย • ไม่นับรายการเทสของแอดมิน"
+        right={
+          <Link href="/admin/tests" className="btn btn-ghost !py-2 text-sm">
+            ดูรายการเทสของแอดมิน
+          </Link>
+        }
+      />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile label="เติมเงินวันนี้" value={`฿${formatBaht(tToday.v)}`} hint={`${tToday.n} รายการ (ซอง + สลิป)`} />
         <StatTile label="เติมเงิน 7 วัน" value={`฿${formatBaht(tWeek.v)}`} hint={`ทั้งหมด ฿${formatBaht(tAll.v)}`} />
         <StatTile label="ขายวันนี้" value={`฿${formatNumber(sToday.v)}`} hint={`${sToday.n} คำสั่งซื้อ`} />
         <StatTile label="ขาย 7 วัน" value={`฿${formatNumber(sWeek.v)}`} hint={`${sWeek.n} คำสั่งซื้อ`} />
-        <StatTile label="สมาชิก" value={formatNumber(users.n)} />
+        <StatTile label="สมาชิก" value={formatNumber(users.n)} hint="ไม่รวมแอดมิน" />
         <StatTile label="แต้มค้างในระบบ" value={formatBaht(users.pts)} hint="แต้มที่ลูกค้ายังไม่ได้ใช้" />
         <StatTile label="โค้ดยังไม่ใช้" value={formatNumber(codeStats.active)} />
         <StatTile label="โค้ดใช้แล้ว" value={formatNumber(codeStats.used)} />
