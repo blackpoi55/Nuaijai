@@ -1,4 +1,5 @@
 import { getSettings } from "@/lib/settings";
+import { slipOkConfigured } from "@/lib/slipok";
 import { PageTitle } from "../ui";
 import { SettingsForm } from "./form";
 
@@ -8,7 +9,7 @@ export default async function AdminSettings() {
   return (
     <div className="max-w-2xl">
       <PageTitle title="ตั้งค่าร้าน" />
-      <SettingsForm initial={st} />
+      <SettingsForm initial={st} slipOk={slipOkConfigured()} />
       <div className="glass mt-6 space-y-2 rounded-2xl p-5 text-sm">
         <h3 className="font-bold">ค่าที่ตั้งในเซิร์ฟเวอร์ (ไฟล์ .env / Vercel)</h3>
         <p className="text-muted">

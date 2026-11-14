@@ -161,12 +161,16 @@ export const slips = pgTable(
     status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
     note: text("note"), // เหตุผลที่ปฏิเสธ
     adminId: integer("admin_id"),
+    // ตรวจสลิปอัตโนมัติ (SlipOK): เลขอ้างอิงรายการโอน (กันสลิปซ้ำแม้รูปต่างกัน) + ผลตรวจให้แอดมินดู
+    transRef: text("trans_ref"),
+    checkNote: text("check_note"),
+    auto: boolean("auto").notNull().default(false), // true = ระบบอนุมัติเอง
     // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
     isTest: boolean("is_test").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   },
-  (t) => [index("slips_user_idx").on(t.userId), index("slips_status_idx").on(t.status), index("slips_hash_idx").on(t.imageHash)],
+  (t) => [index("slips_user_idx").on(t.userId), index("slips_status_idx").on(t.status), index("slips_hash_idx").on(t.imageHash), uniqueIndex("slips_trans_ref_idx").on(t.transRef)],
 );
 
 // แจ้งเตือนในเว็บ (กระดิ่ง) — ส่ง Web Push ไปด้วยถ้าเครื่องนั้นเปิดรับไว้

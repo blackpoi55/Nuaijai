@@ -6,6 +6,7 @@ import { TopupTabs } from "@/components/topup-tabs";
 import { requireUser } from "@/lib/auth";
 import { formatBaht } from "@/lib/pricing";
 import { getSettings, promptPayId } from "@/lib/settings";
+import { slipOkConfigured } from "@/lib/slipok";
 
 export const metadata = { title: "เติมแต้ม" };
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export default async function TopupPage() {
               </div>
             </div>
 
-            <TopupTabs angpaoOpen={st.angpaoOpen} promptpayOpen={st.promptpayOpen} promptpayId={promptPayId()} contactUrl={st.contactUrl} />
+            <TopupTabs angpaoOpen={st.angpaoOpen} promptpayOpen={st.promptpayOpen} promptpayId={promptPayId()} contactUrl={st.contactUrl} autoCheck={st.slipAuto && slipOkConfigured()} />
 
           </div>
         </section>

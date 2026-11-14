@@ -1,5 +1,9 @@
 // สร้างข้อความ QR พร้อมเพย์ (มาตรฐาน EMVCo ของ ธปท.) ใส่ยอดเงินในตัว — ใช้ได้ทั้งฝั่งเซิร์ฟเวอร์และเบราว์เซอร์
 
+/** ยอดเติมขั้นต่ำ/สูงสุดของพร้อมเพย์ (บาท) */
+export const MIN_SLIP_BAHT = 20;
+export const MAX_SLIP_BAHT = 50000;
+
 function tlv(id: string, value: string) {
   return id + String(value.length).padStart(2, "0") + value;
 }

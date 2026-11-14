@@ -275,7 +275,7 @@ export async function rejectSlipAction(_: AdminState, f: FormData): Promise<Admi
   const db = await getDb();
   const [s] = await db
     .update(schema.slips)
-    .set({ status: "rejected", note, adminId: admin.id, reviewedAt: new Date() })
+    .set({ status: "rejected", note, adminId: admin.id, reviewedAt: new Date(), transRef: null }) // ปล่อยเลขรายการ ให้ส่งสลิปใบนี้ใหม่ได้ถ้าปฏิเสธผิด
     .where(and(eq(schema.slips.id, id), eq(schema.slips.status, "pending")))
     .returning({ id: schema.slips.id, userId: schema.slips.userId, amount: schema.slips.amount });
   revalidatePath("/admin", "layout");
@@ -295,6 +295,7 @@ export async function saveSettingsAction(_: AdminState, f: FormData): Promise<Ad
     shopOpen: f.get("shopOpen") === "on",
     angpaoOpen: f.get("angpaoOpen") === "on",
     promptpayOpen: f.get("promptpayOpen") === "on",
+    slipAuto: f.get("slipAuto") === "on",
     announcement: str(f, "announcement").slice(0, 300),
     contactUrl: /^https:\/\//.test(str(f, "contactUrl")) ? str(f, "contactUrl").slice(0, 300) : "",
   });

@@ -12,15 +12,17 @@ export function TopupTabs({
   promptpayOpen,
   promptpayId,
   contactUrl,
+  autoCheck = false,
 }: {
   angpaoOpen: boolean;
   promptpayOpen: boolean;
   promptpayId: string;
   contactUrl: string;
+  autoCheck?: boolean;
 }) {
   const methods: { id: Method; label: string; sub: string; icon: typeof Gift; on: boolean }[] = [
     { id: "angpao", label: "ซองอั่งเปา", sub: "TrueMoney • เข้าทันที", icon: Gift, on: angpaoOpen },
-    { id: "promptpay", label: "พร้อมเพย์", sub: "แนบสลิป • แอดมินตรวจ", icon: QrCode, on: promptpayOpen && !!promptpayId },
+    { id: "promptpay", label: "พร้อมเพย์", sub: autoCheck ? "แนบสลิป • ตรวจอัตโนมัติ" : "แนบสลิป • แอดมินตรวจ", icon: QrCode, on: promptpayOpen && !!promptpayId },
   ];
   const open = methods.filter((m) => m.on);
   const [tab, setTab] = useState<Method>(open[0]?.id ?? "angpao");
@@ -74,7 +76,7 @@ export function TopupTabs({
           </details>
         </div>
       ) : (
-        <PromptPayForm promptpayId={promptpayId} contactUrl={contactUrl} />
+        <PromptPayForm promptpayId={promptpayId} contactUrl={contactUrl} autoCheck={autoCheck} />
       )}
     </div>
   );

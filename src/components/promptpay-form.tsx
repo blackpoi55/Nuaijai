@@ -5,7 +5,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { CheckCircle2, ExternalLink, ImagePlus, Loader2, MessageCircle, Send, XCircle } from "lucide-react";
 import { submitSlipAction } from "@/app/actions/shop";
-import { maskPhone, promptPayPayload } from "@/lib/promptpay";
+import { MAX_SLIP_BAHT, MIN_SLIP_BAHT, maskPhone, promptPayPayload } from "@/lib/promptpay";
 
 const QUICK = [50, 100, 200, 300, 500, 1000];
 
@@ -54,7 +54,7 @@ function ContactAdmin({ url, strong }: { url: string; strong?: boolean }) {
   );
 }
 
-export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string; contactUrl: string }) {
+export function PromptPayForm({ promptpayId, contactUrl, autoCheck = false }: { promptpayId: string; contactUrl: string; autoCheck?: boolean }) {
   const [state, action, pending] = useActionState(submitSlipAction, undefined);
   const [amount, setAmount] = useState("100");
   const [qr, setQr] = useState("");
@@ -63,7 +63,7 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const baht = Number(amount);
-  const validAmount = Number.isFinite(baht) && baht >= 1 && baht <= 50000;
+  const validAmount = Number.isFinite(baht) && baht >= MIN_SLIP_BAHT && baht <= MAX_SLIP_BAHT;
 
   useEffect(() => {
     if (!validAmount || !promptpayId) return setQr("");
@@ -88,7 +88,7 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
       {/* 1. ยอด */}
       <div>
         <p className="mb-2 text-sm font-semibold">
-          <span className="text-dim">1.</span> ใส่ยอดที่จะโอน (บาท)
+          <span className="text-dim">1.</span> ใส่ยอดที่จะโอน (บาท) <span className="font-normal text-dim">• ขั้นต่ำ ฿{MIN_SLIP_BAHT}</span>
         </p>
         <input
           name="amount"
@@ -97,6 +97,11 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
           inputMode="decimal"
           className="input !py-3.5 text-center text-2xl font-extrabold"
         />
+        {amount !== "" && !validAmount && (
+          <p className="mt-1.5 text-center text-sm text-danger">
+            เติมขั้นต่ำ ฿{MIN_SLIP_BAHT} สูงสุด ฿{MAX_SLIP_BAHT.toLocaleString("th-TH")}
+          </p>
+        )}
         <div className="mt-2 grid grid-cols-6 gap-1.5">
           {QUICK.map((q) => (
             <button
@@ -185,7 +190,7 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
         className="btn btn-primary w-full !py-4 text-base"
       >
         {pending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
-        {pending ? "กำลังส่งสลิป..." : "ส่งสลิปให้แอดมินตรวจ"}
+        {pending ? (autoCheck ? "กำลังตรวจสลิป..." : "กำลังส่งสลิป...") : autoCheck ? "ส่งสลิป เติมแต้มทันที" : "ส่งสลิปให้แอดมินตรวจ"}
       </button>
 
       {state && (
@@ -198,7 +203,8 @@ export function PromptPayForm({ promptpayId, contactUrl }: { promptpayId: string
         </div>
       )}
 
-      <ContactAdmin url={contactUrl} strong={state?.ok} />
+      {autoCheck && <p className="-mt-2 text-center text-xs text-dim">ระบบตรวจสลิปอัตโนมัติ — ถ้าตรวจไม่ผ่านจะส่งให้แอดมินตรวจต่อ</p>}
+      <ContactAdmin url={contactUrl} strong={state?.ok && !state.auto} />
     </form>
   );
 }

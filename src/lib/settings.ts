@@ -7,6 +7,7 @@ export type ShopSettings = {
   shopOpen: boolean;
   angpaoOpen: boolean; // เติมด้วยซองอั่งเปา TrueMoney
   promptpayOpen: boolean; // เติมด้วยพร้อมเพย์ + แนบสลิป
+  slipAuto: boolean; // ตรวจสลิปอัตโนมัติด้วย SlipOK (ต้องตั้ง SLIPOK_API_KEY + SLIPOK_BRANCH_ID)
   announcement: string;
   contactUrl: string; // ลิงก์ทักแอดมิน (Discord) ให้ตรวจสลิปเร็ว
   wheelOpen: boolean; // วงล้อเสี่ยงโชค
@@ -18,6 +19,7 @@ const DEFAULTS: ShopSettings = {
   shopOpen: true,
   angpaoOpen: true,
   promptpayOpen: true,
+  slipAuto: true,
   announcement: "",
   contactUrl: "https://discord.com/users/335392827938832384",
   wheelOpen: true,

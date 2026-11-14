@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { saveSettingsAction } from "@/app/actions/admin";
 import type { ShopSettings } from "@/lib/settings";
 
-export function SettingsForm({ initial }: { initial: ShopSettings }) {
+export function SettingsForm({ initial, slipOk = false }: { initial: ShopSettings; slipOk?: boolean }) {
   const [state, action, pending] = useActionState(saveSettingsAction, undefined);
   return (
     <form action={action} className="glass space-y-5 rounded-3xl p-6">
@@ -30,6 +30,7 @@ export function SettingsForm({ initial }: { initial: ShopSettings }) {
         <span className="block text-sm font-semibold">วิธีเติมแต้ม</span>
         <Toggle name="angpaoOpen" on={initial.angpaoOpen} label="ซองอั่งเปา TrueMoney" hint="ปิด = ซ่อนจากหน้าเติมแต้ม และระบบไม่รับซอง" />
         <Toggle name="promptpayOpen" on={initial.promptpayOpen} label="พร้อมเพย์ + แนบสลิป" hint="ปิด = ซ่อนจากหน้าเติมแต้ม และระบบไม่รับสลิปใหม่ (สลิปที่ส่งมาแล้วยังตรวจได้)" />
+        <Toggle name="slipAuto" on={initial.slipAuto} label="ตรวจสลิปอัตโนมัติ (SlipOK)" hint={slipOk ? "สลิปถูกต้อง = เติมแต้มทันที • ไม่ผ่าน = รอแอดมินตรวจ" : "ยังไม่ได้ใส่ SLIPOK_API_KEY / SLIPOK_BRANCH_ID ใน Vercel — ตอนนี้แอดมินตรวจเองทุกใบ"} />
       </div>
       {state && <p className={`text-sm ${state.ok ? "text-leaf" : "text-danger"}`}>{state.ok ?? state.error}</p>}
       <button disabled={pending} className="btn btn-primary">

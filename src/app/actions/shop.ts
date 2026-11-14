@@ -12,7 +12,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { newCode } from "@/lib/codes";
 import { cartBaht, formatBaht } from "@/lib/pricing";
 import { isOnSale } from "@/lib/products";
-import { getSettings } from "@/lib/settings";
+import { MAX_SLIP_BAHT, MIN_SLIP_BAHT } from "@/lib/promptpay";
+import { getSettings, promptPayId } from "@/lib/settings";
+import { checkSlip, slipOkConfigured } from "@/lib/slipok";
 import { parseVoucher, redeemVoucher } from "@/lib/truemoney";
 
 // ---------------------------------------------------------------- เติมแต้มด้วยซองอั่งเปา
@@ -107,7 +109,7 @@ export async function topupAction(_: TopupState, form: FormData): Promise<TopupS
 
 // ---------------------------------------------------------------- เติมด้วยพร้อมเพย์ + แนบสลิป (แอดมินตรวจ)
 
-export type SlipState = { ok: boolean; message: string } | undefined;
+export type SlipState = { ok: boolean; message: string; auto?: boolean } | undefined;
 
 const MAX_SLIP_CHARS = 2_500_000; // data URL หลังย่อแล้ว (~1.8MB)
 
@@ -118,7 +120,8 @@ export async function submitSlipAction(_: SlipState, form: FormData): Promise<Sl
   if (!st.promptpayOpen) return { ok: false, message: "ปิดรับเติมด้วยพร้อมเพย์ชั่วคราว" };
 
   const baht = Number(form.get("amount"));
-  if (!Number.isFinite(baht) || baht < 1 || baht > 50000) return { ok: false, message: "ยอดโอนต้องอยู่ระหว่าง 1–50,000 บาท" };
+  if (!Number.isFinite(baht) || baht < MIN_SLIP_BAHT || baht > MAX_SLIP_BAHT)
+    return { ok: false, message: `เติมขั้นต่ำ ฿${MIN_SLIP_BAHT} สูงสุด ฿${MAX_SLIP_BAHT.toLocaleString("th-TH")}` };
   const amount = Math.round(baht * 100);
 
   const image = String(form.get("image") ?? "");
@@ -126,11 +129,6 @@ export async function submitSlipAction(_: SlipState, form: FormData): Promise<Sl
   if (image.length > MAX_SLIP_CHARS) return { ok: false, message: "รูปใหญ่เกินไป ลองแคปหน้าจอสลิปใหม่" };
 
   const db = await getDb();
-  const [{ n }] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(schema.slips)
-    .where(and(eq(schema.slips.userId, user.id), eq(schema.slips.status, "pending")));
-  if (n >= 3) return { ok: false, message: "มีสลิปรอตรวจ 3 ใบแล้ว รอแอดมินตรวจก่อนนะ" };
 
   const imageHash = createHash("sha256").update(image.slice(image.indexOf(",") + 1)).digest("hex");
   const [dup] = await db
@@ -140,10 +138,74 @@ export async function submitSlipAction(_: SlipState, form: FormData): Promise<Sl
     .limit(1);
   if (dup) return { ok: false, message: "สลิปนี้ถูกส่งเข้าระบบแล้ว" };
 
+  // กันยิงสลิปรัว ๆ จนโควต้าตรวจสลิปหมด
+  const [{ today }] = await db
+    .select({ today: sql<number>`count(*)::int` })
+    .from(schema.slips)
+    .where(and(eq(schema.slips.userId, user.id), gt(schema.slips.createdAt, new Date(Date.now() - 86400_000))));
+  if (today >= 15) return { ok: false, message: "ส่งสลิปวันนี้ครบจำนวนแล้ว ทักแอดมินได้เลย" };
+
   const isTest = user.role === "admin"; // สลิปของแอดมิน = เทส ไม่นับรายได้
-  await db.insert(schema.slips).values({ userId: user.id, amount, imageData: image, imageHash, isTest });
+
+  // ตรวจอัตโนมัติ (SlipOK) — ผ่าน = เติมแต้มทันที • ไม่ผ่าน/ตรวจไม่ได้ = ส่งให้แอดมินตรวจเหมือนเดิม
+  const check = st.slipAuto && slipOkConfigured() ? await checkSlip(image, amount, promptPayId()) : null;
+  if (check?.transRef) {
+    const [used] = await db
+      .select({ id: schema.slips.id })
+      .from(schema.slips)
+      .where(and(eq(schema.slips.transRef, check.transRef), sql`${schema.slips.status} <> 'rejected'`))
+      .limit(1);
+    if (used) return { ok: false, message: "สลิปนี้ถูกใช้เติมไปแล้ว" };
+  }
+
+  if (check?.status === "ok") {
+    const got = check.amount;
+    const r = await db
+      .transaction(async (tx) => {
+        const [slip] = await tx
+          .insert(schema.slips)
+          .values({ userId: user.id, amount: got, imageData: image, imageHash, isTest, status: "approved", auto: true, transRef: check.transRef, checkNote: check.note, reviewedAt: new Date() })
+          .returning({ id: schema.slips.id });
+        const [u] = await tx
+          .update(schema.users)
+          .set({ points: sql`${schema.users.points} + ${got}` })
+          .where(eq(schema.users.id, user.id))
+          .returning({ points: schema.users.points });
+        await tx.insert(schema.pointLedger).values({ userId: user.id, delta: got, balanceAfter: u.points, kind: "topup", note: "พร้อมเพย์ (ตรวจสลิปอัตโนมัติ)", refId: slip.id });
+        return u.points;
+      })
+      .catch((e) => {
+        // ชน unique trans_ref = มีคนส่งสลิปเดียวกันเข้ามาพร้อมกัน
+        if (String(e?.code ?? e?.cause?.code) === "23505") return null;
+        throw e;
+      });
+    if (r === null) return { ok: false, message: "สลิปนี้ถูกใช้เติมไปแล้ว" };
+    revalidatePath("/", "layout");
+    if (!isTest)
+      after(() =>
+        notifyAdmins({ title: `✅ สลิปผ่านอัตโนมัติ ฿${formatBaht(got)}`, body: `${user.displayName}${check.sender ? ` • ผู้โอน ${check.sender}` : ""}`, url: "/admin/slips?s=approved", tag: "slip-auto", important: false }),
+      );
+    return { ok: true, auto: true, message: `ตรวจสลิปผ่าน เติมแล้ว +${formatBaht(got)} แต้ม` };
+  }
+
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.slips)
+    .where(and(eq(schema.slips.userId, user.id), eq(schema.slips.status, "pending")));
+  if (n >= 3) return { ok: false, message: "มีสลิปรอตรวจ 3 ใบแล้ว รอแอดมินตรวจก่อนนะ" };
+
+  await db.insert(schema.slips).values({ userId: user.id, amount, imageData: image, imageHash, isTest, transRef: check?.transRef ?? null, checkNote: check?.note ?? null });
   revalidatePath("/topup");
-  if (!isTest) after(() => notifyAdmins({ title: `🧾 สลิปพร้อมเพย์รอตรวจ ฿${formatBaht(amount)}`, body: `จาก ${user.displayName} • กดเพื่อตรวจ`, url: "/admin/slips", tag: "slip", action: "ตรวจสลิป" }));
+  if (!isTest)
+    after(() =>
+      notifyAdmins({
+        title: `🧾 สลิปพร้อมเพย์รอตรวจ ฿${formatBaht(amount)}`,
+        body: `จาก ${user.displayName}${check ? ` • ${check.note}` : ""} • กดเพื่อตรวจ`,
+        url: "/admin/slips",
+        tag: "slip",
+        action: "ตรวจสลิป",
+      }),
+    );
   return { ok: true, message: `ส่งสลิป ฿${formatBaht(amount)} แล้ว รอแอดมินตรวจ แต้มจะเข้าหลังอนุมัติ` };
 }
 
