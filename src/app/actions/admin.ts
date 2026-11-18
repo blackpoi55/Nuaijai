@@ -7,7 +7,7 @@ import { notifyUser } from "@/lib/notify";
 import { getDb, schema } from "@/db";
 import type { Perk } from "@/db/schema";
 import { hashPassword, requireAdmin } from "@/lib/auth";
-import { saveSettings } from "@/lib/settings";
+import { getSettings, saveSettings } from "@/lib/settings";
 import { normalizeCoupon, randomCoupon } from "@/lib/coupons";
 
 export type AdminState = { ok?: string; error?: string } | undefined;
@@ -166,44 +166,99 @@ export async function setUserFlagsAction(userId: number, patch: { banned?: boole
 
 // ---------------------------------------------------------------- โค้ด
 
-export async function revokeCodeAction(codeId: number, refund: boolean) {
+/**
+ * ยกเลิกโค้ด (ใช้ได้เฉพาะโค้ดที่ยังไม่ถูกแลก)
+ * refund = true → ยกเลิกการซื้อเต็มรูปแบบ:
+ *   • คืนแต้มตามสัดส่วน Robux ของโค้ดนี้ในคำสั่งซื้อ (คิดจากยอดที่จ่ายจริงหลังหักคูปอง)
+ *   • หักสิทธิ์หมุนวงล้อที่ได้จากยอดนี้ (ถ้าหมุนไปแล้วจนไม่พอหัก ก็หักเท่าที่มี)
+ *   • ถ้าทุกโค้ดในคำสั่งซื้อถูกยกเลิกหมด → คืนสิทธิ์คูปองที่ใช้ ให้ใช้ใหม่ได้
+ */
+export async function revokeCodeAction(codeId: number, refund: boolean): Promise<AdminState> {
   const admin = await requireAdmin();
   const db = await getDb();
-  let refunded: { userId: number; amount: number; label: string } | null = null;
-  await db.transaction(async (tx) => {
+  const st = await getSettings();
+  type Done = { userId: number; amount: number; label: string; orderId: number; spinsTaken: number; coupon: string | null };
+  let done: Done | null = null;
+  const ok = await db.transaction(async (tx) => {
     const [c] = await tx
       .update(schema.codes)
       .set({ status: "revoked" })
       .where(and(eq(schema.codes.id, codeId), eq(schema.codes.status, "active")))
       .returning();
-    if (!c || !refund) return;
-    // คืนแต้มตามสัดส่วน Robux ของโค้ดนี้ในคำสั่งซื้อ
+    if (!c) return false;
+    if (!refund) return true;
     const [o] = await tx.select().from(schema.orders).where(eq(schema.orders.id, c.orderId));
-    if (!o) return;
+    if (!o) return true;
     const codeRobux = c.passKeys.reduce((s, k) => s + (o.items.find((i) => i.passKey === k)?.priceRobux ?? 0), 0);
     const amount = Math.floor((o.totalBaht * 100 * codeRobux) / Math.max(1, o.totalRobux));
-    if (amount <= 0) return;
-    const [u] = await tx
-      .update(schema.users)
-      .set({ points: sql`${schema.users.points} + ${amount}` })
-      .where(eq(schema.users.id, c.userId))
-      .returning({ points: schema.users.points });
-    await tx.insert(schema.pointLedger).values({
-      userId: c.userId,
-      delta: amount,
-      balanceAfter: u.points,
-      kind: "refund",
-      note: `คืนแต้มโค้ด ${c.label}`,
-      refId: c.id,
-      adminId: admin.id,
-    });
-    refunded = { userId: c.userId, amount, label: c.label };
+    const result: Done = { userId: c.userId, amount: 0, label: c.label, orderId: o.id, spinsTaken: 0, coupon: null };
+
+    if (amount > 0) {
+      const [before] = await tx.select({ credits: schema.users.spinCredits }).from(schema.users).where(eq(schema.users.id, c.userId));
+      // สิทธิ์หมุนได้จากยอดซื้อในร้านเท่านั้น — หักยอดที่คืนออกจากยอดสะสม
+      const per = Math.max(1, st.bahtPerSpin);
+      const back = o.source === "shop" ? Math.floor(amount / 100) : 0;
+      const total = sql`greatest(0, ${schema.users.spinCredits} * ${per} + ${schema.users.spinProgress} - ${back})`;
+      const [u] = await tx
+        .update(schema.users)
+        .set({
+          points: sql`${schema.users.points} + ${amount}`,
+          ...(back > 0 ? { spinCredits: sql`${total} / ${per}`, spinProgress: sql`${total} % ${per}` } : {}),
+        })
+        .where(eq(schema.users.id, c.userId))
+        .returning({ points: schema.users.points, credits: schema.users.spinCredits });
+      await tx.insert(schema.pointLedger).values({
+        userId: c.userId,
+        delta: amount,
+        balanceAfter: u.points,
+        kind: "refund",
+        note: `คืนแต้มโค้ด ${c.label} (ยกเลิกคำสั่งซื้อ #${o.id})`,
+        refId: c.id,
+        adminId: admin.id,
+      });
+      result.amount = amount;
+      result.spinsTaken = Math.max(0, (before?.credits ?? 0) - u.credits);
+    }
+
+    // คืนคูปอง เมื่อยกเลิกครบทุกโค้ดในคำสั่งซื้อนี้แล้ว
+    if (o.couponId) {
+      const [left] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.codes)
+        .where(and(eq(schema.codes.orderId, o.id), sql`${schema.codes.status} <> 'revoked'`));
+      if (left.n === 0) {
+        const gone = await tx
+          .delete(schema.couponRedemptions)
+          .where(and(eq(schema.couponRedemptions.couponId, o.couponId), eq(schema.couponRedemptions.orderId, o.id)))
+          .returning({ id: schema.couponRedemptions.id });
+        if (gone.length) {
+          const [cp] = await tx
+            .update(schema.coupons)
+            .set({ usedCount: sql`greatest(0, ${schema.coupons.usedCount} - 1)` })
+            .where(eq(schema.coupons.id, o.couponId))
+            .returning({ code: schema.coupons.code });
+          result.coupon = cp?.code ?? null;
+        }
+      }
+    }
+    done = result;
+    return true;
   });
   revalidatePath("/admin/codes");
-  if (refunded) {
-    const r = refunded as { userId: number; amount: number; label: string };
-    after(() => notifyUser(r.userId, { title: `↩️ คืนแต้ม +${(r.amount / 100).toLocaleString("th-TH")} แต้ม`, body: `ยกเลิกโค้ด ${r.label}`, url: "/topup" }));
-  }
+  if (!ok) return { error: "โค้ดนี้ถูกใช้หรือยกเลิกไปแล้ว" };
+  if (!done) return { ok: "ยกเลิกโค้ดแล้ว (ไม่คืนแต้ม)" };
+  const r = done as Done;
+  const baht = (r.amount / 100).toLocaleString("th-TH");
+  const extra = [r.spinsTaken > 0 && `หักสิทธิ์หมุน ${r.spinsTaken} ครั้ง`, r.coupon && `คืนคูปอง ${r.coupon}`].filter(Boolean).join(" • ");
+  if (r.amount > 0 || r.coupon)
+    after(() =>
+      notifyUser(r.userId, {
+        title: r.amount > 0 ? `↩️ คืนแต้ม +${baht} แต้ม` : "↩️ ยกเลิกคำสั่งซื้อแล้ว",
+        body: `ยกเลิกคำสั่งซื้อ #${r.orderId} (${r.label})${r.coupon ? ` • คูปอง ${r.coupon} กลับมาใช้ได้อีกครั้ง` : ""}`.slice(0, 180),
+        url: "/topup",
+      }),
+    );
+  return { ok: `ยกเลิกแล้ว คืน ${baht} แต้ม${extra ? ` • ${extra}` : ""}` };
 }
 
 // ---------------------------------------------------------------- ซองที่ค้าง

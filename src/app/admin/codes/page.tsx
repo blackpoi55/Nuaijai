@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { prettyCode } from "@/lib/codes";
-import { PageTitle, SearchBox, Status, Table, thaiDate } from "../ui";
+import { PageTitle, SearchBox, Status, Table, likeEscape, thaiDate } from "../ui";
 import { RevokeButton } from "./revoke";
 
 export default async function AdminCodes({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -15,13 +15,15 @@ export default async function AdminCodes({ searchParams }: { searchParams: Promi
         clean.length >= 4 ? sql`${schema.codes.code} like ${`%${clean}%`}` : undefined,
         num ? eq(schema.codes.usedByRobloxId, num) : undefined,
         num ? eq(schema.codes.orderId, num) : undefined,
-        q.trim().length >= 3 ? ilike(schema.codes.usedByName, `%${q.trim().replace(/^@/, "").replace(/[%_]/g, "")}%`) : undefined,
+        q.trim().length >= 3 ? ilike(schema.codes.usedByName, `%${likeEscape(q.trim().replace(/^@/, ""))}%`) : undefined,
       )
     : undefined;
   const rows = await db
-    .select({ c: schema.codes, u: schema.users.displayName })
+    .select({ c: schema.codes, u: schema.users.displayName, coupon: schema.coupons.code })
     .from(schema.codes)
     .innerJoin(schema.users, eq(schema.codes.userId, schema.users.id))
+    .innerJoin(schema.orders, eq(schema.codes.orderId, schema.orders.id))
+    .leftJoin(schema.coupons, eq(schema.orders.couponId, schema.coupons.id))
     .where(and(eq(schema.codes.isTest, false), where))
     .orderBy(desc(schema.codes.id))
     .limit(200);
@@ -29,7 +31,7 @@ export default async function AdminCodes({ searchParams }: { searchParams: Promi
     <div>
       <PageTitle title="คำสั่งซื้อ / โค้ด" sub="ค้นหาด้วยโค้ด, เลขคำสั่งซื้อ, Roblox ID หรือ username ที่ใช้โค้ด" right={<SearchBox placeholder="ค้นหา..." defaultValue={q} />} />
       <Table head={["เวลา", "คำสั่งซื้อ", "ผู้ซื้อ", "โค้ด", "ของ", "สถานะ", "ใช้โดย", ""]} empty={rows.length === 0}>
-        {rows.map(({ c, u }) => (
+        {rows.map(({ c, u, coupon }) => (
           <tr key={c.id}>
             <td className="text-xs text-muted">{thaiDate.format(c.createdAt)}</td>
             <td>
@@ -59,7 +61,9 @@ export default async function AdminCodes({ searchParams }: { searchParams: Promi
               )}
               {c.usedAt && <div>{thaiDate.format(c.usedAt)}</div>}
             </td>
-            <td>{c.status === "active" && <RevokeButton id={c.id} />}</td>
+            <td>
+              <RevokeButton id={c.id} orderId={c.orderId} coupon={coupon} active={c.status === "active"} />
+            </td>
           </tr>
         ))}
       </Table>
