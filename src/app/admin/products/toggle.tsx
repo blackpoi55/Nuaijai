@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { toggleProductAction } from "@/app/actions/admin";
 
-export function ToggleActive({ id, active, onSale }: { id: number; active: boolean; onSale: boolean }) {
+export function ToggleActive({ id, active, onSale, upcoming = false }: { id: number; active: boolean; onSale: boolean; upcoming?: boolean }) {
   const [pending, start] = useTransition();
   return (
     <button
@@ -13,7 +13,7 @@ export function ToggleActive({ id, active, onSale }: { id: number; active: boole
       title="กดเพื่อเปิด/ปิดการขาย"
     >
       <span className={`size-1.5 rounded-full ${onSale ? "bg-leaf" : active ? "bg-gold" : "bg-dim"}`} />
-      {onSale ? "วางขาย" : active ? "หมดเวลาขาย" : "ปิดขาย"}
+      {onSale ? "วางขาย" : upcoming ? "รอเปิดขาย" : active ? "หมดเวลาขาย" : "ปิดขาย"}
     </button>
   );
 }

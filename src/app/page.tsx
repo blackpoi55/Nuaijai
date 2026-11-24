@@ -2,13 +2,13 @@ import Link from "next/link";
 import { Gamepad2, ShoppingBag, Wallet } from "lucide-react";
 import { HeroCard } from "@/components/hero-card";
 import { ProductCard } from "@/components/product-card";
-import { listOnSale } from "@/lib/products";
+import { listOnSale, listUpcoming } from "@/lib/products";
 import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [products, st] = await Promise.all([listOnSale(), getSettings()]);
+  const [products, upcoming, st] = await Promise.all([listOnSale(), listUpcoming(), getSettings()]);
   const featured = products.find((p) => p.featured) ?? products[0];
   const passes = products.filter((p) => p.kind === "pass");
   const permanent = passes.filter((p) => !p.saleEnd);
@@ -62,10 +62,11 @@ export default async function Home() {
 
       <Collection id="passes" title="พาสถาวร" items={permanent} />
       <Collection title="ลิมิเต็ด" note="หมดเวลาแล้วไม่วางขายอีก" items={limited} />
+      <Collection id="soon" title="เร็วๆ นี้" note="ยังซื้อไม่ได้ — ถึงเวลาแล้วเปิดขายเองอัตโนมัติ" items={upcoming} upcoming />
       <Collection id="boxes" title="กล่องเลือก & บัตร" items={boxes} cols4 />
       <Collection id="gacha" title="ตั๋วสุ่มกาชา" items={gacha} cols4 />
 
-      {products.length === 0 && <p className="py-20 text-center text-muted">ยังไม่มีสินค้าวางขาย</p>}
+      {products.length === 0 && upcoming.length === 0 && <p className="py-20 text-center text-muted">ยังไม่มีสินค้าวางขาย</p>}
 
       {/* ---------------- FAQ ---------------- */}
       <section className="mx-auto max-w-2xl pb-16 pt-6">
@@ -86,14 +87,28 @@ export default async function Home() {
   );
 }
 
-function Collection({ id, title, note, items, cols4 }: { id?: string; title: string; note?: string; items: Parameters<typeof ProductCard>[0]["p"][]; cols4?: boolean }) {
+function Collection({
+  id,
+  title,
+  note,
+  items,
+  cols4,
+  upcoming,
+}: {
+  id?: string;
+  title: string;
+  note?: string;
+  items: Parameters<typeof ProductCard>[0]["p"][];
+  cols4?: boolean;
+  upcoming?: boolean;
+}) {
   if (items.length === 0) return null;
   return (
     <section id={id} className="scroll-mt-24 pb-24">
       <Heading title={title} note={note} />
       <div className={`grid grid-cols-2 gap-4 sm:gap-5 ${cols4 ? "md:grid-cols-3 xl:grid-cols-4" : "md:grid-cols-3"}`}>
         {items.map((p, i) => (
-          <ProductCard key={p.id} p={p} index={i} />
+          <ProductCard key={p.id} p={p} index={i} upcoming={upcoming} />
         ))}
       </div>
     </section>

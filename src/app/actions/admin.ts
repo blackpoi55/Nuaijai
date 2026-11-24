@@ -38,11 +38,13 @@ export async function saveProductAction(_: AdminState, f: FormData): Promise<Adm
   const priceRobux = int(f, "priceRobux");
   const robloxProductId = int(f, "robloxProductId");
   const iconRaw = str(f, "iconAssetId");
+  const saleStartRaw = str(f, "saleStart");
   const saleEndRaw = str(f, "saleEnd");
   if (!/^[a-z0-9_]{2,40}$/.test(passKey)) return { error: "รหัสในเกม ต้องเป็น a-z 0-9 _ (ต้องตรงกับ id ใน Config.Passes)" };
   if (!name) return { error: "ใส่ชื่อสินค้า" };
   if (!(priceRobux > 0)) return { error: "ราคา Robux ต้องมากกว่า 0" };
   if (!(robloxProductId > 0)) return { error: "ใส่ Developer Product ID" };
+  if (saleStartRaw && saleEndRaw && saleStartRaw >= saleEndRaw) return { error: "เวลาเปิดขายต้องมาก่อนเวลาหมดขาย" };
   const color = /^#[0-9a-fA-F]{6}$/.test(str(f, "color")) ? str(f, "color") : "#7C5CFF";
   const values = {
     passKey,
@@ -58,6 +60,7 @@ export async function saveProductAction(_: AdminState, f: FormData): Promise<Adm
     featured: f.get("featured") === "on",
     sortOrder: Number.isFinite(int(f, "sortOrder")) ? int(f, "sortOrder") : 100,
     // input datetime-local เป็นเวลาไทย
+    saleStart: saleStartRaw ? new Date(`${saleStartRaw}:00+07:00`) : null,
     saleEnd: saleEndRaw ? new Date(`${saleEndRaw}:00+07:00`) : null,
     updatedAt: new Date(),
   };

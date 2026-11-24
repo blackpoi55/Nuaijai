@@ -78,6 +78,13 @@
       "when": 1794626885681,
       "tag": "0010_slip_check",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795513306575,
+      "tag": "0011_sale_start",
+      "breakpoints": true
     }
   ]
 }

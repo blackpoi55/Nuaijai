@@ -33,6 +33,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
       active: p.active,
       featured: p.featured,
       sortOrder: String(p.sortOrder),
+      saleStart: toLocalInput(p.saleStart),
       saleEnd: toLocalInput(p.saleEnd),
     };
   }

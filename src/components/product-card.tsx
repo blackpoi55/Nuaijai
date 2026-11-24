@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Plus, X } from "lucide-react";
+import { CheckCircle2, Clock, Plus, X } from "lucide-react";
 import type { PublicProduct } from "@/lib/products";
 import { formatNumber, itemBaht } from "@/lib/pricing";
 import { AddToCartButton, useCart } from "./cart";
+import { Countdown, thaiWhen } from "./countdown";
 import { PassIcon } from "./ui";
 
 export function daysLeft(iso: string | null) {
@@ -14,10 +15,27 @@ export function daysLeft(iso: string | null) {
   return Math.ceil(ms / 86400_000);
 }
 
-export function ProductCard({ p, index = 0 }: { p: PublicProduct; index?: number }) {
+/** ป้ายนับถอยหลังบนการ์ด: ของเร็วๆ นี้ = นับถึงวันเปิดขาย • ของลิมิเต็ด = นับถึงวันปิดขาย */
+function SaleBadge({ p, upcoming }: { p: PublicProduct; upcoming?: boolean }) {
+  const to = upcoming ? p.saleStart : p.saleEnd;
+  if (!to) return null;
+  const days = daysLeft(to);
+  return (
+    <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded-xl bg-black/65 px-2.5 py-1.5 text-champagne backdrop-blur sm:left-2.5 sm:top-2.5">
+      <Clock className="size-3.5 shrink-0" />
+      <span className="flex flex-col leading-tight">
+        <span className="text-[10px] text-champagne/75">{upcoming ? "เปิดขายใน" : "ปิดขายใน"}</span>
+        <span className="whitespace-nowrap text-[11px] font-semibold">
+          <Countdown to={to} fallback={`${days} วัน`} />
+        </span>
+      </span>
+    </span>
+  );
+}
+
+export function ProductCard({ p, index = 0, upcoming = false }: { p: PublicProduct; index?: number; upcoming?: boolean }) {
   const { rate, qty, add } = useCart();
   const [open, setOpen] = useState(false);
-  const left = daysLeft(p.saleEnd);
   const inCart = qty[p.id] ?? 0;
 
   return (
@@ -31,9 +49,7 @@ export function ProductCard({ p, index = 0 }: { p: PublicProduct; index?: number
         <div className="relative overflow-hidden rounded-[1.35rem]">
           <PassIcon src={p.iconUrl} name={p.name} color={p.color} className="aspect-square w-full transition-transform duration-700 group-hover:scale-[1.04]" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent" />
-          {left !== null && (
-            <span className="absolute left-2.5 top-2.5 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-champagne backdrop-blur">เหลือ {left} วัน</span>
-          )}
+          <SaleBadge p={p} upcoming={upcoming} />
           {inCart > 0 && (
             <span className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full bg-gold text-[11px] font-bold text-ink">{inCart}</span>
           )}
@@ -45,25 +61,29 @@ export function ProductCard({ p, index = 0 }: { p: PublicProduct; index?: number
               <p className="text-[11px] text-dim">{formatNumber(p.priceRobux)} R$</p>
               <p className="font-display text-xl font-semibold text-gold sm:text-2xl">฿{formatNumber(itemBaht(p.priceRobux, rate))}</p>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                add(p.id);
-              }}
-              aria-label={`ใส่ ${p.name} ลงตะกร้า`}
-              className="btn btn-primary !size-10 shrink-0 !p-0"
-            >
-              <Plus className="size-5" />
-            </button>
+            {upcoming ? (
+              <span className="chip shrink-0 !px-2.5 !py-1.5 text-[11px] text-champagne">เร็วๆ นี้</span>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  add(p.id);
+                }}
+                aria-label={`ใส่ ${p.name} ลงตะกร้า`}
+                className="btn btn-primary !size-10 shrink-0 !p-0"
+              >
+                <Plus className="size-5" />
+              </button>
+            )}
           </div>
         </div>
       </article>
-      {open && <PerksModal p={p} onClose={() => setOpen(false)} />}
+      {open && <PerksModal p={p} upcoming={upcoming} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-export function PerksModal({ p, onClose }: { p: PublicProduct; onClose: () => void }) {
+export function PerksModal({ p, onClose, upcoming = false }: { p: PublicProduct; onClose: () => void; upcoming?: boolean }) {
   const { rate } = useCart();
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -96,6 +116,20 @@ export function PerksModal({ p, onClose }: { p: PublicProduct; onClose: () => vo
           </div>
           <div className="px-6 pb-6">
             <div className="gold-rule my-4" />
+            {(upcoming ? p.saleStart : p.saleEnd) && (
+              <div className="mb-5 flex items-center gap-3 rounded-2xl border border-gold/25 bg-gold/[0.06] px-4 py-3">
+                <Clock className="size-5 shrink-0 text-gold" strokeWidth={1.75} />
+                <div className="leading-snug">
+                  <p className="text-xs text-muted">
+                    {upcoming ? `เปิดขาย ${thaiWhen.format(new Date(p.saleStart!))} น.` : `ปิดขาย ${thaiWhen.format(new Date(p.saleEnd!))} น.`}
+                  </p>
+                  <p className="font-display text-lg font-semibold text-champagne">
+                    {upcoming ? "อีก " : "เหลือเวลา "}
+                    <Countdown to={(upcoming ? p.saleStart : p.saleEnd)!} />
+                  </p>
+                </div>
+              </div>
+            )}
             <ul className="space-y-3.5">
               {p.perks.map((k) => (
                 <li key={k.t} className="flex gap-3">
@@ -112,7 +146,11 @@ export function PerksModal({ p, onClose }: { p: PublicProduct; onClose: () => vo
                 <p className="text-xs text-dim">{formatNumber(p.priceRobux)} R$</p>
                 <p className="font-display text-3xl font-semibold text-gold">฿{formatNumber(itemBaht(p.priceRobux, rate))}</p>
               </div>
-              <AddToCartButton id={p.id} className="!px-7 !py-3" />
+              {upcoming ? (
+                <span className="btn btn-ghost pointer-events-none !px-6 !py-3 opacity-80">ยังไม่เปิดขาย</span>
+              ) : (
+                <AddToCartButton id={p.id} className="!px-7 !py-3" />
+              )}
             </div>
           </div>
         </div>

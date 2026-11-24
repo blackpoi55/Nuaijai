@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PassIcon } from "@/components/ui";
-import { iconUrl, isOnSale, listAllProducts, thumbsFor } from "@/lib/products";
+import { iconUrl, isOnSale, isUpcoming, listAllProducts, thumbsFor } from "@/lib/products";
 import { formatNumber, itemBaht } from "@/lib/pricing";
 import { getSettings } from "@/lib/settings";
 import { PageTitle, Table, thaiDate } from "../ui";
@@ -21,7 +21,7 @@ export default async function AdminProducts() {
           </Link>
         }
       />
-      <Table head={["", "ชื่อ", "รหัสพาส", "ราคาเต็ม", "≈ บาท", "หมดขาย", "สถานะ", ""]} empty={products.length === 0}>
+      <Table head={["", "ชื่อ", "รหัสพาส", "ราคาเต็ม", "≈ บาท", "ช่วงขาย", "สถานะ", ""]} empty={products.length === 0}>
         {products.map((p) => (
           <tr key={p.id}>
             <td className="w-14">
@@ -36,9 +36,13 @@ export default async function AdminProducts() {
             </td>
             <td className="tabular-nums">{formatNumber(p.priceRobux)} R$</td>
             <td className="tabular-nums">฿{formatNumber(itemBaht(p.priceRobux, st.robuxPerBaht))}</td>
-            <td className="text-xs text-muted">{p.saleEnd ? thaiDate.format(p.saleEnd) : "-"}</td>
+            <td className="text-xs text-muted">
+              {p.saleStart && <div>เริ่ม {thaiDate.format(p.saleStart)}</div>}
+              {p.saleEnd && <div>ถึง {thaiDate.format(p.saleEnd)}</div>}
+              {!p.saleStart && !p.saleEnd && "-"}
+            </td>
             <td>
-              <ToggleActive id={p.id} active={p.active} onSale={isOnSale(p)} />
+              <ToggleActive id={p.id} active={p.active} onSale={isOnSale(p)} upcoming={isUpcoming(p)} />
             </td>
             <td>
               <Link href={`/admin/products/${p.id}`} className="btn btn-ghost !px-3 !py-1.5 text-xs">

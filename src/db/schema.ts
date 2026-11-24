@@ -63,6 +63,7 @@ export const products = pgTable("products", {
   active: boolean("active").notNull().default(true),
   featured: boolean("featured").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(100),
+  saleStart: timestamp("sale_start", { withTimezone: true }), // ยังไม่ถึงเวลา = โชว์ "เร็วๆ นี้" แต่ยังซื้อไม่ได้
   saleEnd: timestamp("sale_end", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

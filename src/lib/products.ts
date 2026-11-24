@@ -16,6 +16,7 @@ export type PublicProduct = {
   iconUrl: string | null;
   priceRobux: number;
   featured: boolean;
+  saleStart: string | null;
   saleEnd: string | null;
 };
 
@@ -30,8 +31,14 @@ export function thumbsFor(products: Pick<Product, "iconAssetId">[]) {
   return getThumbs(products.map((p) => p.iconAssetId)).catch(() => new Map<number, string>());
 }
 
-export function isOnSale(p: Pick<Product, "active" | "saleEnd">, now = new Date()) {
-  return p.active && (!p.saleEnd || p.saleEnd > now);
+/** ซื้อได้ตอนนี้ไหม: เปิดอยู่ + ถึงเวลาเปิดขายแล้ว + ยังไม่หมดเวลา */
+export function isOnSale(p: Pick<Product, "active" | "saleStart" | "saleEnd">, now = new Date()) {
+  return p.active && (!p.saleStart || p.saleStart <= now) && (!p.saleEnd || p.saleEnd > now);
+}
+
+/** ยังไม่ถึงเวลาเปิดขาย (โชว์ "เร็วๆ นี้" ได้ แต่ซื้อไม่ได้) */
+export function isUpcoming(p: Pick<Product, "active" | "saleStart">, now = new Date()) {
+  return p.active && !!p.saleStart && p.saleStart > now;
 }
 
 export function toPublic(p: Product, thumbs?: Map<number, string>): PublicProduct {
@@ -46,6 +53,7 @@ export function toPublic(p: Product, thumbs?: Map<number, string>): PublicProduc
     iconUrl: iconUrl(p.iconAssetId, thumbs),
     priceRobux: p.priceRobux,
     featured: p.featured,
+    saleStart: p.saleStart ? p.saleStart.toISOString() : null,
     saleEnd: p.saleEnd ? p.saleEnd.toISOString() : null,
   };
 }
@@ -83,6 +91,7 @@ async function seedMissing() {
         priceRobux: p.priceRobux,
         sortOrder: p.sortOrder,
         featured: p.featured ?? false,
+        saleStart: p.saleStart ? new Date(p.saleStart * 1000) : null,
         saleEnd: p.saleEnd ? new Date(p.saleEnd * 1000) : null,
       })),
     )
@@ -101,4 +110,13 @@ export async function listOnSale(): Promise<PublicProduct[]> {
   const onSale = all.filter((p) => isOnSale(p, now));
   const thumbs = await thumbsFor(onSale);
   return onSale.map((p) => toPublic(p, thumbs));
+}
+
+/** ของที่จะวางขายเร็วๆ นี้ เรียงตามวันเปิดขาย */
+export async function listUpcoming(): Promise<PublicProduct[]> {
+  const all = await listAllProducts();
+  const now = new Date();
+  const soon = all.filter((p) => isUpcoming(p, now)).sort((a, b) => a.saleStart!.getTime() - b.saleStart!.getTime() || a.sortOrder - b.sortOrder);
+  const thumbs = await thumbsFor(soon);
+  return soon.map((p) => toPublic(p, thumbs));
 }

@@ -19,6 +19,7 @@ type Initial = {
   active: boolean;
   featured: boolean;
   sortOrder: string;
+  saleStart: string;
   saleEnd: string;
 } | null;
 
@@ -88,6 +89,9 @@ export function ProductForm({ initial }: { initial: Initial }) {
         </L>
         <L label="ลำดับ" hint="น้อย = อยู่ก่อน">
           <input name="sortOrder" defaultValue={initial?.sortOrder ?? "100"} inputMode="numeric" className="input" />
+        </L>
+        <L label="เริ่มขาย (เวลาไทย)" hint="ว่าง = ขายเลย • ใส่วันข้างหน้า = โชว์ ‘เร็วๆ นี้’ แล้วเปิดขายเองเมื่อถึงเวลา">
+          <input name="saleStart" type="datetime-local" defaultValue={initial?.saleStart} className="input" />
         </L>
         <L label="หมดเวลาขาย (เวลาไทย)" hint="ว่าง = ขายตลอด">
           <input name="saleEnd" type="datetime-local" defaultValue={initial?.saleEnd} className="input" />
