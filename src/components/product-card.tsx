@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock, Plus, X } from "lucide-react";
+import { Bell, CheckCircle2, Clock, Flame, Plus, X } from "lucide-react";
 import type { PublicProduct } from "@/lib/products";
 import { formatNumber, itemBaht } from "@/lib/pricing";
 import { AddToCartButton, useCart } from "./cart";
-import { Countdown, thaiWhen } from "./countdown";
+import { festivalOf } from "@/lib/festivals";
+import { Countdown, endLabel, formatLeft, thaiDay, thaiWhen, useCountdown } from "./countdown";
 import { PassIcon } from "./ui";
 
 export function daysLeft(iso: string | null) {
@@ -15,20 +16,28 @@ export function daysLeft(iso: string | null) {
   return Math.ceil(ms / 86400_000);
 }
 
-/** ป้ายนับถอยหลังบนการ์ด: ของเร็วๆ นี้ = นับถึงวันเปิดขาย • ของลิมิเต็ด = นับถึงวันปิดขาย */
+/**
+ * ป้ายนับถอยหลังบนการ์ด (สีของเทศกาล)
+ *   ของลิมิเต็ด = "ปิดขายใน" ไล่สีเทศกาล • เหลือ ≤ 24 ชม. เป็นแดงกระพริบ
+ *   ของเร็วๆ นี้ = "เปิดขายใน" สีขาวนวล
+ */
 function SaleBadge({ p, upcoming }: { p: PublicProduct; upcoming?: boolean }) {
   const to = upcoming ? p.saleStart : p.saleEnd;
+  const left = useCountdown(to);
   if (!to) return null;
+  const fest = festivalOf(p.passKey);
+  const hot = !upcoming && left !== null && left <= 86400_000;
   const days = daysLeft(to);
   return (
-    <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded-xl bg-black/65 px-2.5 py-1.5 text-champagne backdrop-blur sm:left-2.5 sm:top-2.5">
-      <Clock className="size-3.5 shrink-0" />
-      <span className="flex flex-col leading-tight">
-        <span className="text-[10px] text-champagne/75">{upcoming ? "เปิดขายใน" : "ปิดขายใน"}</span>
-        <span className="whitespace-nowrap text-[11px] font-semibold">
-          <Countdown to={to} fallback={`${days} วัน`} />
-        </span>
-      </span>
+    <span
+      className={`absolute inset-x-2 top-2 flex items-center justify-center gap-1.5 rounded-xl px-2 py-1.5 font-semibold shadow-lg sm:inset-x-2.5 sm:top-2.5 ${
+        upcoming ? "bg-white/90 text-ink" : hot ? "animate-pulse bg-danger text-white" : "text-ink"
+      }`}
+      style={!upcoming && !hot ? { background: `linear-gradient(90deg, ${fest.c1}, ${fest.c2})` } : undefined}
+    >
+      {upcoming ? <Bell className="size-3.5 shrink-0" /> : <Flame className="size-3.5 shrink-0" />}
+      <span className="hidden text-[11px] font-medium opacity-80 sm:inline">{upcoming ? "เปิดใน" : "ปิดใน"}</span>
+      <span className="whitespace-nowrap text-xs tabular-nums sm:text-[13px]">{left === null ? `${days} วัน` : formatLeft(left)}</span>
     </span>
   );
 }
@@ -51,7 +60,7 @@ export function ProductCard({ p, index = 0, upcoming = false }: { p: PublicProdu
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent" />
           <SaleBadge p={p} upcoming={upcoming} />
           {inCart > 0 && (
-            <span className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full bg-gold text-[11px] font-bold text-ink">{inCart}</span>
+            <span className="absolute bottom-2.5 right-2.5 grid size-6 place-items-center rounded-full bg-gold text-[11px] font-bold text-ink">{inCart}</span>
           )}
         </div>
         <div className="flex flex-1 flex-col px-1.5 pb-1 pt-3.5">
@@ -62,7 +71,10 @@ export function ProductCard({ p, index = 0, upcoming = false }: { p: PublicProdu
               <p className="font-display text-xl font-semibold text-gold sm:text-2xl">฿{formatNumber(itemBaht(p.priceRobux, rate))}</p>
             </div>
             {upcoming ? (
-              <span className="chip shrink-0 !px-2.5 !py-1.5 text-[11px] text-champagne">เร็วๆ นี้</span>
+              <span className="chip shrink-0 flex-col !gap-0 !px-2.5 !py-1 text-center leading-tight text-champagne" suppressHydrationWarning>
+                <span className="text-[10px] text-muted">เปิดขาย</span>
+                <span className="text-xs font-semibold">{p.saleStart ? thaiDay.format(new Date(p.saleStart)) : "เร็วๆ นี้"}</span>
+              </span>
             ) : (
               <button
                 onClick={(e) => {
@@ -121,7 +133,7 @@ export function PerksModal({ p, onClose, upcoming = false }: { p: PublicProduct;
                 <Clock className="size-5 shrink-0 text-gold" strokeWidth={1.75} />
                 <div className="leading-snug">
                   <p className="text-xs text-muted">
-                    {upcoming ? `เปิดขาย ${thaiWhen.format(new Date(p.saleStart!))} น.` : `ปิดขาย ${thaiWhen.format(new Date(p.saleEnd!))} น.`}
+                    {upcoming ? `เปิดขาย ${thaiWhen.format(new Date(p.saleStart!))} น.` : `ขายถึง ${endLabel(p.saleEnd!)} น.`}
                   </p>
                   <p className="font-display text-lg font-semibold text-champagne">
                     {upcoming ? "อีก " : "เหลือเวลา "}

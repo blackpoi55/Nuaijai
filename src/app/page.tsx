@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Gamepad2, ShoppingBag, Wallet } from "lucide-react";
 import { HeroCard } from "@/components/hero-card";
+import { DropTicker, FestivalDrop } from "@/components/festival-drop";
 import { ProductCard } from "@/components/product-card";
+import { festivalOf } from "@/lib/festivals";
+import type { PublicProduct } from "@/lib/products";
 import { listOnSale, listUpcoming } from "@/lib/products";
 import { getSettings } from "@/lib/settings";
 
@@ -15,12 +18,20 @@ export default async function Home() {
   const limited = passes.filter((p) => p.saleEnd);
   const gacha = products.filter((p) => p.kind === "item" && p.passKey.startsWith("gacha_"));
   const boxes = products.filter((p) => p.kind === "item" && !p.passKey.startsWith("gacha_"));
+  // แถบเตือนบนสุด: ของที่ใกล้ปิดก่อน ถ้าไม่มีค่อยเป็นของที่จะเปิด
+  const closingFirst = [...limited].sort((a, b) => a.saleEnd!.localeCompare(b.saleEnd!))[0];
+  const ticker = closingFirst
+    ? { mode: "closing" as const, to: closingFirst.saleEnd!, fest: festivalOf(closingFirst.passKey), href: "#limited" }
+    : upcoming[0]
+      ? { mode: "opening" as const, to: upcoming[0].saleStart!, fest: festivalOf(upcoming[0].passKey), href: "#soon" }
+      : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4">
       {/* ---------------- HERO ---------------- */}
       <section className="grid items-center gap-14 pb-20 pt-12 md:grid-cols-[1.1fr_1fr] md:pb-28 md:pt-24">
         <div className="animate-rise">
+          {ticker && <DropTicker {...ticker} />}
           <p className="eyebrow">Nuaijai · Pass Collection</p>
           <h1 className="mt-6 text-5xl font-semibold leading-[1.2] sm:text-6xl md:text-7xl">
             เหนื่อยใจ
@@ -60,9 +71,10 @@ export default async function Home() {
         ))}
       </section>
 
+      {/* ของเทศกาลขึ้นก่อน: มีเวลาจำกัด */}
+      <Drops id="limited" title="ลิมิเต็ด" note="หมดเวลาแล้วไม่วางขายอีก" mode="closing" items={limited} />
+      <Drops id="soon" title="เร็วๆ นี้" note="ยังซื้อไม่ได้ — ถึงเวลาแล้วเปิดขายเองอัตโนมัติ" mode="opening" items={upcoming} />
       <Collection id="passes" title="พาสถาวร" items={permanent} />
-      <Collection title="ลิมิเต็ด" note="หมดเวลาแล้วไม่วางขายอีก" items={limited} />
-      <Collection id="soon" title="เร็วๆ นี้" note="ยังซื้อไม่ได้ — ถึงเวลาแล้วเปิดขายเองอัตโนมัติ" items={upcoming} upcoming />
       <Collection id="boxes" title="กล่องเลือก & บัตร" items={boxes} cols4 />
       <Collection id="gacha" title="ตั๋วสุ่มกาชา" items={gacha} cols4 />
 
@@ -84,6 +96,40 @@ export default async function Home() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** ของเทศกาล จัดกลุ่มตามเทศกาล+เวลา แต่ละกลุ่มมีป้ายนับถอยหลังใหญ่ */
+function Drops({ id, title, note, mode, items }: { id: string; title: string; note: string; mode: "closing" | "opening"; items: PublicProduct[] }) {
+  if (items.length === 0) return null;
+  const groups = new Map<string, { to: string; fest: ReturnType<typeof festivalOf>; items: PublicProduct[] }>();
+  for (const p of items) {
+    const to = (mode === "closing" ? p.saleEnd : p.saleStart)!;
+    const fest = festivalOf(p.passKey);
+    const k = `${fest.key}|${to}`;
+    if (!groups.has(k)) groups.set(k, { to, fest, items: [] });
+    groups.get(k)!.items.push(p);
+  }
+  const list = [...groups.values()].sort((a, b) => a.to.localeCompare(b.to));
+  return (
+    <section id={id} className="scroll-mt-24 pb-24">
+      <Heading title={title} note={note} />
+      <div className="space-y-12">
+        {list.map((g, gi) => {
+          const anchor = `${id}-${gi}`;
+          return (
+            <div key={`${g.fest.key}${g.to}`}>
+              <FestivalDrop mode={mode} to={g.to} fest={g.fest} items={g.items} anchor={anchor} />
+              <div id={anchor} className="grid scroll-mt-24 grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
+                {g.items.map((p, i) => (
+                  <ProductCard key={p.id} p={p} index={i} upcoming={mode === "opening"} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
