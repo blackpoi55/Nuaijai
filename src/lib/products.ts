@@ -91,6 +91,7 @@ async function seedMissing() {
         priceRobux: p.priceRobux,
         sortOrder: p.sortOrder,
         featured: p.featured ?? false,
+        active: p.active ?? true,
         saleStart: p.saleStart ? new Date(p.saleStart * 1000) : null,
         saleEnd: p.saleEnd ? new Date(p.saleEnd * 1000) : null,
       })),

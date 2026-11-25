@@ -43,7 +43,7 @@ export function ProductForm({ initial }: { initial: Initial }) {
     <form ref={form} action={action} className="glass space-y-5 rounded-3xl p-6">
       <input type="hidden" name="id" value={initial?.id ?? 0} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <L label="Developer Product ID" hint="ID ของผลิตภัณฑ์นักพัฒนาใน Roblox">
+        <L label="Developer Product ID" hint="ID ของผลิตภัณฑ์นักพัฒนาใน Roblox • 0 = ขายบนเว็บอย่างเดียว">
           <div className="flex gap-2">
             <input name="robloxProductId" defaultValue={initial?.robloxProductId} required inputMode="numeric" className="input" />
             <button

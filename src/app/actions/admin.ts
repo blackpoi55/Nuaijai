@@ -43,7 +43,8 @@ export async function saveProductAction(_: AdminState, f: FormData): Promise<Adm
   if (!/^[a-z0-9_]{2,40}$/.test(passKey)) return { error: "รหัสในเกม ต้องเป็น a-z 0-9 _ (ต้องตรงกับ id ใน Config.Passes)" };
   if (!name) return { error: "ใส่ชื่อสินค้า" };
   if (!(priceRobux > 0)) return { error: "ราคา Robux ต้องมากกว่า 0" };
-  if (!(robloxProductId > 0)) return { error: "ใส่ Developer Product ID" };
+  // 0 = ขายบนเว็บอย่างเดียว ไม่มีสินค้า Robux (เช่น กล่องสุ่มบัตรตีบวก)
+  if (!(robloxProductId >= 0)) return { error: "ใส่ Developer Product ID (หรือ 0 ถ้าขายบนเว็บอย่างเดียว)" };
   if (saleStartRaw && saleEndRaw && saleStartRaw >= saleEndRaw) return { error: "เวลาเปิดขายต้องมาก่อนเวลาหมดขาย" };
   const color = /^#[0-9a-fA-F]{6}$/.test(str(f, "color")) ? str(f, "color") : "#7C5CFF";
   const values = {
