@@ -143,6 +143,7 @@ export const codes = pgTable(
     usedAt: timestamp("used_at", { withTimezone: true }),
     // true = รายการของแอดมิน (ทดสอบ) ไม่นับเป็นรายได้ ดูแยกที่ /admin/tests
     isTest: boolean("is_test").notNull().default(false),
+    bonus: boolean("bonus").notNull().default(false), // true = ของแถมตามยอดซื้อ (ไม่ได้จ่ายเงิน ไม่คืนแต้ม)
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("codes_user_idx").on(t.userId), index("codes_order_idx").on(t.orderId)],
@@ -347,7 +348,20 @@ export const giftRedemptions = pgTable(
   (t) => [uniqueIndex("gift_user_uq").on(t.giftId, t.robloxId)], // คนละครั้ง
 );
 
+// ของแถมตามยอดซื้อ: จ่ายครบ minBaht ในคำสั่งซื้อเดียว ได้โค้ดของแถมเพิ่ม (ถึงหลายขั้น ได้ขั้นสูงสุดขั้นเดียว)
+export const bonusRules = pgTable("bonus_rules", {
+  id: serial("id").primaryKey(),
+  minBaht: integer("min_baht").notNull(),
+  passKey: text("pass_key").notNull(),
+  qty: integer("qty").notNull().default(1),
+  active: boolean("active").notNull().default(true),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
+export type BonusRule = typeof bonusRules.$inferSelect;
 export type GiftCode = typeof giftCodes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Code = typeof codes.$inferSelect;

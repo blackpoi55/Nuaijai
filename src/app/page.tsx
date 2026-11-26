@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Gamepad2, ShoppingBag, Wallet } from "lucide-react";
 import { HeroCard } from "@/components/hero-card";
+import { BonusStrip } from "@/components/bonus-bar";
 import { DropTicker, FestivalDrop } from "@/components/festival-drop";
+import { listBonusTiers } from "@/lib/bonus";
 import { ProductCard } from "@/components/product-card";
 import { festivalOf } from "@/lib/festivals";
 import type { PublicProduct } from "@/lib/products";
@@ -11,7 +13,7 @@ import { getSettings } from "@/lib/settings";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [products, upcoming, st] = await Promise.all([listOnSale(), listUpcoming(), getSettings()]);
+  const [products, upcoming, st, bonusTiers] = await Promise.all([listOnSale(), listUpcoming(), getSettings(), listBonusTiers().catch(() => [])]);
   const featured = products.find((p) => p.featured) ?? products[0];
   const passes = products.filter((p) => p.kind === "pass");
   const permanent = passes.filter((p) => !p.saleEnd);
@@ -72,6 +74,7 @@ export default async function Home() {
       </section>
 
       {/* ของเทศกาลขึ้นก่อน: มีเวลาจำกัด */}
+      <BonusStrip tiers={bonusTiers} />
       <Drops id="limited" title="ลิมิเต็ด" note="หมดเวลาแล้วไม่วางขายอีก" mode="closing" items={limited} />
       <Drops id="soon" title="เร็วๆ นี้" note="ยังซื้อไม่ได้ — ถึงเวลาแล้วเปิดขายเองอัตโนมัติ" mode="opening" items={upcoming} />
       <Collection id="passes" title="พาสถาวร" items={permanent} />

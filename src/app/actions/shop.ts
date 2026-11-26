@@ -7,6 +7,8 @@ import { after } from "next/server";
 import { notifyAdmins, notifyUser } from "@/lib/notify";
 import { getDb, schema } from "@/db";
 import type { Coupon, OrderItem } from "@/db/schema";
+import { activeBonusRules, bonusQty, pickBonus } from "@/lib/bonus";
+import { bonusName } from "@/lib/bonus-shared";
 import { discountFor, findUsableCoupon } from "@/lib/coupons";
 import { getCurrentUser } from "@/lib/auth";
 import { newCode } from "@/lib/codes";
@@ -274,6 +276,15 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
         ]
       : items.flatMap((i) => Array.from({ length: i.qty }, () => ({ passKeys: [i.passKey], label: i.name })));
 
+  // ของแถมตามยอดที่จ่ายจริง (หลังหักคูปอง): ได้ขั้นสูงสุดขั้นเดียว เป็นโค้ดแยกอีกใบ
+  const bonus = pickBonus(await activeBonusRules(now), totalBaht);
+  const bonusCode = bonus
+    ? (() => {
+        const q = bonusQty(bonus.rule, bonus.product);
+        return { passKeys: Array.from({ length: q }, () => bonus.product.passKey), label: `${bonusName({ name: bonus.product.name, qty: q })} (ของแถม)` };
+      })()
+    : null;
+
   // คำสั่งซื้อของแอดมิน = เทส ไม่นับรายได้ และไม่แจ้งเตือน "ขายได้"
   const isTest = user.role === "admin";
   let earnedSpins = 0;
@@ -301,6 +312,7 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
       await tx.insert(schema.codes).values(
         bundles.map((b) => ({ code: newCode(), orderId: o.id, userId: user.id, passKeys: b.passKeys, label: b.label, isTest })),
       );
+      if (bonusCode) await tx.insert(schema.codes).values({ code: newCode(), orderId: o.id, userId: user.id, ...bonusCode, isTest, bonus: true });
       // วงล้อ: ซื้อสะสมครบ bahtPerSpin บาท ได้ 1 สิทธิ์หมุน (คิดจากยอดที่จ่ายจริง)
       if (st.wheelOpen && totalBaht > 0) {
         const per = st.bahtPerSpin;

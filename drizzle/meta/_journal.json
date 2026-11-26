@@ -92,6 +92,13 @@
       "when": 1795672721014,
       "tag": "0012_gift_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795675557020,
+      "tag": "0013_bonus_rules",
+      "breakpoints": true
     }
   ]
 }

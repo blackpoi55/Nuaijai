@@ -8,6 +8,8 @@ import { checkDiscountCouponAction } from "@/app/actions/coupon";
 import { checkoutAction } from "@/app/actions/shop";
 import type { PublicProduct } from "@/lib/products";
 import { cartBaht, formatBaht, formatNumber } from "@/lib/pricing";
+import type { BonusTier } from "@/lib/bonus-shared";
+import { BonusBar } from "./bonus-bar";
 import { PassIcon } from "./ui";
 
 type Mode = "single" | "split";
@@ -35,6 +37,7 @@ type Ctx = {
   open: boolean;
   setOpen: (v: boolean) => void;
   toast: (text: string, kind?: "ok" | "err") => void;
+  bonusTiers: BonusTier[];
 };
 
 const CartCtx = createContext<Ctx | null>(null);
@@ -52,6 +55,7 @@ export function CartProvider({
   signedIn,
   points,
   myCoupons = [],
+  bonusTiers = [],
   children,
 }: {
   products: PublicProduct[];
@@ -59,6 +63,7 @@ export function CartProvider({
   signedIn: boolean;
   points: number;
   myCoupons?: MyCoupon[];
+  bonusTiers?: BonusTier[];
   children: React.ReactNode;
 }) {
   const [requestedCoupon, setRequestedCoupon] = useState<string | null>(null);
@@ -132,6 +137,7 @@ export function CartProvider({
     open,
     setOpen,
     toast,
+    bonusTiers,
   };
 
   return (
@@ -299,6 +305,7 @@ function CartDrawer() {
 
         {lines.length > 0 && (
           <footer className="space-y-4 border-t border-line px-5 py-4">
+            <BonusBar tiers={c.bonusTiers} paidBaht={payBaht} />
             {/* รูปแบบโค้ด */}
             <div className="grid grid-cols-2 gap-2 rounded-2xl bg-black/30 p-1 text-sm">
               <button

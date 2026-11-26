@@ -62,7 +62,7 @@ export default async function AdminCodes({ searchParams }: { searchParams: Promi
               {c.usedAt && <div>{thaiDate.format(c.usedAt)}</div>}
             </td>
             <td>
-              <RevokeButton id={c.id} orderId={c.orderId} coupon={coupon} active={c.status === "active"} />
+              <RevokeButton id={c.id} orderId={c.orderId} coupon={coupon} active={c.status === "active"} bonus={c.bonus} />
             </td>
           </tr>
         ))}

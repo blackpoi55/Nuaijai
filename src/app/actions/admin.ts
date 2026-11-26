@@ -177,6 +177,8 @@ export async function setUserFlagsAction(userId: number, patch: { banned?: boole
  *   • คืนแต้มตามสัดส่วน Robux ของโค้ดนี้ในคำสั่งซื้อ (คิดจากยอดที่จ่ายจริงหลังหักคูปอง)
  *   • หักสิทธิ์หมุนวงล้อที่ได้จากยอดนี้ (ถ้าหมุนไปแล้วจนไม่พอหัก ก็หักเท่าที่มี)
  *   • ถ้าทุกโค้ดในคำสั่งซื้อถูกยกเลิกหมด → คืนสิทธิ์คูปองที่ใช้ ให้ใช้ใหม่ได้
+ * ยกเลิกโค้ดที่จ่ายเงินครบทุกใบแล้ว → โค้ดของแถมที่ยังไม่ถูกใช้ถูกยกเลิกด้วย
+ * โค้ดของแถมเอง: ยกเลิกได้ แต่ไม่มีแต้มให้คืน
  */
 export async function revokeCodeAction(codeId: number, refund: boolean): Promise<AdminState> {
   const admin = await requireAdmin();
@@ -184,13 +186,27 @@ export async function revokeCodeAction(codeId: number, refund: boolean): Promise
   const st = await getSettings();
   type Done = { userId: number; amount: number; label: string; orderId: number; spinsTaken: number; coupon: string | null };
   let done: Done | null = null;
-  const ok = await db.transaction(async (tx) => {
+  let bonusGone = 0;
+  const ok = await db.transaction(async (tx): Promise<boolean | "bonus"> => {
     const [c] = await tx
       .update(schema.codes)
       .set({ status: "revoked" })
       .where(and(eq(schema.codes.id, codeId), eq(schema.codes.status, "active")))
       .returning();
     if (!c) return false;
+    if (c.bonus) return "bonus";
+    const [paidLeft] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.codes)
+      .where(and(eq(schema.codes.orderId, c.orderId), eq(schema.codes.bonus, false), sql`${schema.codes.status} <> 'revoked'`));
+    if (paidLeft.n === 0) {
+      const gone = await tx
+        .update(schema.codes)
+        .set({ status: "revoked" })
+        .where(and(eq(schema.codes.orderId, c.orderId), eq(schema.codes.bonus, true), eq(schema.codes.status, "active")))
+        .returning({ id: schema.codes.id });
+      bonusGone = gone.length;
+    }
     if (!refund) return true;
     const [o] = await tx.select().from(schema.orders).where(eq(schema.orders.id, c.orderId));
     if (!o) return true;
@@ -230,7 +246,7 @@ export async function revokeCodeAction(codeId: number, refund: boolean): Promise
       const [left] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.codes)
-        .where(and(eq(schema.codes.orderId, o.id), sql`${schema.codes.status} <> 'revoked'`));
+        .where(and(eq(schema.codes.orderId, o.id), eq(schema.codes.bonus, false), sql`${schema.codes.status} <> 'revoked'`));
       if (left.n === 0) {
         const gone = await tx
           .delete(schema.couponRedemptions)
@@ -251,10 +267,12 @@ export async function revokeCodeAction(codeId: number, refund: boolean): Promise
   });
   revalidatePath("/admin/codes");
   if (!ok) return { error: "โค้ดนี้ถูกใช้หรือยกเลิกไปแล้ว" };
-  if (!done) return { ok: "ยกเลิกโค้ดแล้ว (ไม่คืนแต้ม)" };
+  if (ok === "bonus") return { ok: "ยกเลิกโค้ดของแถมแล้ว" };
+  const bonusNote = bonusGone > 0 ? " • ยกเลิกโค้ดของแถมด้วย" : "";
+  if (!done) return { ok: `ยกเลิกโค้ดแล้ว (ไม่คืนแต้ม)${bonusNote}` };
   const r = done as Done;
   const baht = (r.amount / 100).toLocaleString("th-TH");
-  const extra = [r.spinsTaken > 0 && `หักสิทธิ์หมุน ${r.spinsTaken} ครั้ง`, r.coupon && `คืนคูปอง ${r.coupon}`].filter(Boolean).join(" • ");
+  const extra = [r.spinsTaken > 0 && `หักสิทธิ์หมุน ${r.spinsTaken} ครั้ง`, r.coupon && `คืนคูปอง ${r.coupon}`, bonusGone > 0 && "ยกเลิกโค้ดของแถมด้วย"].filter(Boolean).join(" • ");
   if (r.amount > 0 || r.coupon)
     after(() =>
       notifyUser(r.userId, {
@@ -528,4 +546,46 @@ export async function deleteUnusedGiftsAction(batch: string) {
   const db = await getDb();
   await db.delete(schema.giftCodes).where(and(eq(schema.giftCodes.batch, batch), eq(schema.giftCodes.usedCount, 0)));
   revalidatePath("/admin/gifts");
+}
+
+// ---------------------------------------------------------------- ของแถมตามยอดซื้อ
+
+/** เพิ่ม/แก้ขั้นของแถม: id ว่าง = เพิ่มใหม่ */
+export async function saveBonusAction(_: AdminState, f: FormData): Promise<AdminState> {
+  await requireAdmin();
+  const db = await getDb();
+  const id = int(f, "id");
+  const minBaht = int(f, "minBaht");
+  const productId = int(f, "productId");
+  const qty = Math.min(99, Math.max(1, int(f, "qty") || 1));
+  if (!(minBaht > 0) || minBaht > 1_000_000) return { error: "ใส่ยอดซื้อ (บาท)" };
+  const [p] = await db.select().from(schema.products).where(eq(schema.products.id, productId)).limit(1);
+  if (!p) return { error: "เลือกของแถม" };
+  const bkk = (k: string) => {
+    const v = str(f, k);
+    return v ? new Date(`${v}:00+07:00`) : null;
+  };
+  const startsAt = bkk("startsAt");
+  const endsAt = bkk("endsAt");
+  if ((startsAt && Number.isNaN(+startsAt)) || (endsAt && Number.isNaN(+endsAt))) return { error: "วันเวลาไม่ถูกต้อง" };
+  if (startsAt && endsAt && startsAt >= endsAt) return { error: "วันเริ่มต้องก่อนวันจบ" };
+  const values = { minBaht, passKey: p.passKey, qty: p.kind === "pass" ? 1 : qty, startsAt, endsAt };
+  if (id > 0) await db.update(schema.bonusRules).set(values).where(eq(schema.bonusRules.id, id));
+  else await db.insert(schema.bonusRules).values(values);
+  revalidatePath("/", "layout");
+  return { ok: id > 0 ? "บันทึกแล้ว" : "เพิ่มของแถมแล้ว" };
+}
+
+export async function toggleBonusAction(id: number, active: boolean) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.update(schema.bonusRules).set({ active }).where(eq(schema.bonusRules.id, id));
+  revalidatePath("/", "layout");
+}
+
+export async function deleteBonusAction(id: number) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.delete(schema.bonusRules).where(eq(schema.bonusRules.id, id));
+  revalidatePath("/", "layout");
 }

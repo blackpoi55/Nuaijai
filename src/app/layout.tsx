@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Noto_Serif_Thai, Prompt } from "next/font/google";
 import { CartProvider } from "@/components/cart";
+import { listBonusTiers } from "@/lib/bonus";
 import { Nav } from "@/components/nav";
 import { PushBanner } from "@/components/push-banner";
 import { PwaProvider } from "@/components/pwa";
@@ -49,7 +50,7 @@ async function unreadCount(userId: number) {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [user, products, st] = await Promise.all([getCurrentUser(), listOnSale(), getSettings()]);
+  const [user, products, st, bonusTiers] = await Promise.all([getCurrentUser(), listOnSale(), getSettings(), listBonusTiers().catch(() => [])]);
   const [unread, myCoupons] = user ? await Promise.all([unreadCount(user.id), listMyCoupons(user.id)]) : [0, []];
   const navUser = user ? { name: user.displayName, points: user.points, admin: user.role === "admin", unread } : null;
 
@@ -60,7 +61,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <i />
         </div>
         <PwaProvider userId={user?.id ?? null}>
-        <CartProvider products={products} rate={st.robuxPerBaht} signedIn={!!user} points={user?.points ?? 0} myCoupons={myCoupons.filter((c) => c.kind === "discount")}>
+        <CartProvider products={products} rate={st.robuxPerBaht} signedIn={!!user} points={user?.points ?? 0} myCoupons={myCoupons.filter((c) => c.kind === "discount")} bonusTiers={bonusTiers}>
           <Nav user={navUser} vapidKey={vapidPublicKey()} />
           {st.announcement && (
             <div className="border-b border-line bg-gradient-to-r from-transparent via-amber-200/10 to-transparent px-4 py-2 text-center text-sm text-champagne">
