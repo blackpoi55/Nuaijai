@@ -308,7 +308,47 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// โค้ดแจกของในเกม (แอดมินสร้าง ไม่ผูกกับคำสั่งซื้อ) — กรอกในแอป "โค้ด" ในเกม
+// ใช้ได้กี่คนก็ได้ตาม maxUses (คนละครั้งต่อ Roblox ID) • จำกัดเลเวล / ช่วงเวลาได้
+export const giftCodes = pgTable(
+  "gift_codes",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull().unique(), // ตัวพิมพ์ใหญ่ ไม่มีขีด
+    passKeys: jsonb("pass_keys").$type<string[]>().notNull(), // ซ้ำได้ = หลายชิ้น
+    label: text("label").notNull(),
+    minLevel: integer("min_level").notNull().default(0),
+    maxUses: integer("max_uses").notNull().default(1),
+    usedCount: integer("used_count").notNull().default(0),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    active: boolean("active").notNull().default(true),
+    batch: text("batch").notNull(),
+    note: text("note").notNull().default(""),
+    createdBy: integer("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("gift_codes_batch_idx").on(t.batch)],
+);
+
+export const giftRedemptions = pgTable(
+  "gift_redemptions",
+  {
+    id: serial("id").primaryKey(),
+    giftId: integer("gift_id")
+      .notNull()
+      .references(() => giftCodes.id, { onDelete: "cascade" }),
+    robloxId: bigint("roblox_id", { mode: "number" }).notNull(),
+    name: text("name"),
+    displayName: text("display_name"),
+    level: integer("level"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("gift_user_uq").on(t.giftId, t.robloxId)], // คนละครั้ง
+);
+
 export type User = typeof users.$inferSelect;
+export type GiftCode = typeof giftCodes.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Code = typeof codes.$inferSelect;
 export type Topup = typeof topups.$inferSelect;

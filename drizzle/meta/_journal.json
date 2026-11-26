@@ -85,6 +85,13 @@
       "when": 1795513306575,
       "tag": "0011_sale_start",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795672721014,
+      "tag": "0012_gift_codes",
+      "breakpoints": true
     }
   ]
 }

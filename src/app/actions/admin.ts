@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { notifyUser } from "@/lib/notify";
@@ -9,6 +9,7 @@ import type { Perk } from "@/db/schema";
 import { hashPassword, requireAdmin } from "@/lib/auth";
 import { getSettings, saveSettings } from "@/lib/settings";
 import { normalizeCoupon, randomCoupon } from "@/lib/coupons";
+import { newCode, normalizeGiftCode, prettyCode } from "@/lib/codes";
 
 export type AdminState = { ok?: string; error?: string } | undefined;
 
@@ -447,4 +448,84 @@ export async function saveSettingsPartialAction(_: AdminState, f: FormData): Pro
   await saveSettings({ wheelOpen: f.get("wheelOpen") === "on", bahtPerSpin: per });
   revalidatePath("/", "layout");
   return { ok: "บันทึกแล้ว" };
+}
+
+// ---------------------------------------------------------------- โค้ดแจกของในเกม
+
+export type GiftState = (AdminState & { codes?: string[] }) | undefined;
+
+/** สร้างโค้ดแจกของในเกม: ของหลายอย่างในโค้ดเดียว • จำกัดเลเวล / จำนวนคน / ช่วงเวลา */
+export async function createGiftCodesAction(_: GiftState, f: FormData): Promise<GiftState> {
+  const admin = await requireAdmin();
+  const db = await getDb();
+  const all = await db.select().from(schema.products);
+  const byId = new Map(all.map((p) => [p.id, p]));
+
+  // ของในโค้ด: item=<productId> qty=<จำนวน> (ซ้ำได้หลายแถว)
+  const ids = f.getAll("item").map((v) => Math.trunc(Number(v)));
+  const qtys = f.getAll("qty").map((v) => Math.trunc(Number(v)));
+  const passKeys: string[] = [];
+  const names: string[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const p = byId.get(ids[i]);
+    if (!p) continue;
+    const q = p.kind === "pass" ? 1 : Math.min(99, Math.max(1, qtys[i] || 1));
+    if (p.kind === "pass" && passKeys.includes(p.passKey)) continue;
+    for (let n = 0; n < q; n++) passKeys.push(p.passKey);
+    names.push(q > 1 ? `${p.name} ×${q}` : p.name);
+  }
+  if (!passKeys.length) return { error: "เลือกของที่จะแจกอย่างน้อย 1 อย่าง" };
+  if (passKeys.length > 200) return { error: "ของในโค้ดเดียวเยอะเกินไป (ไม่เกิน 200 ชิ้น)" };
+
+  const rawCustom = str(f, "custom");
+  const custom = rawCustom ? normalizeGiftCode(rawCustom) : null;
+  if (rawCustom && !custom) return { error: "ชื่อโค้ดใช้ได้แค่ A-Z 0-9 _ ยาว 3–24 ตัว (ขีด - จะถูกตัดทิ้ง)" };
+  const quantity = custom ? 1 : Math.min(500, Math.max(1, int(f, "quantity") || 1));
+  const maxUses = Math.min(100000, Math.max(1, int(f, "maxUses") || 1));
+  const minLevel = Math.min(100000, Math.max(0, int(f, "minLevel") || 0));
+  const bkk = (k: string) => {
+    const v = str(f, k);
+    return v ? new Date(`${v}:00+07:00`) : null;
+  };
+  const startsAt = bkk("startsAt");
+  const expiresAt = bkk("expiresAt");
+  if ((startsAt && Number.isNaN(+startsAt)) || (expiresAt && Number.isNaN(+expiresAt))) return { error: "วันเวลาไม่ถูกต้อง" };
+  if (startsAt && expiresAt && startsAt >= expiresAt) return { error: "เวลาเริ่มต้องก่อนเวลาหมดอายุ" };
+  if (expiresAt && expiresAt <= new Date()) return { error: "เวลาหมดอายุผ่านไปแล้ว" };
+  const note = str(f, "note").slice(0, 200);
+  const label = names.join(" + ").slice(0, 200);
+
+  const batch = `${Date.now().toString(36)}${randomCoupon().slice(0, 4)}`.toLowerCase();
+  const codes = new Set<string>();
+  if (custom) codes.add(custom);
+  while (codes.size < quantity) codes.add(newCode());
+  // ห้ามชนกับโค้ดที่ซื้อ (โค้ดที่ซื้อถูกเช็กก่อน)
+  const clash = await db.select({ c: schema.codes.code }).from(schema.codes).where(inArray(schema.codes.code, [...codes]));
+  if (clash.length) return { error: custom ? "ชื่อนี้ซ้ำกับโค้ดที่มีอยู่แล้ว" : "สุ่มโค้ดชนกัน ลองกดสร้างใหม่" };
+  try {
+    await db
+      .insert(schema.giftCodes)
+      .values([...codes].map((code) => ({ code, passKeys, label, minLevel, maxUses, startsAt, expiresAt, batch, note, createdBy: admin.id })));
+  } catch (e) {
+    if (String(e).includes("unique")) return { error: custom ? "มีโค้ดชื่อนี้อยู่แล้ว" : "สุ่มโค้ดชนกัน ลองกดสร้างใหม่" };
+    throw e;
+  }
+  revalidatePath("/admin/gifts");
+  const shown = [...codes].map((c) => (c.length === 12 && !custom ? prettyCode(c) : c));
+  return { ok: `สร้างโค้ดแจก ${codes.size} โค้ดแล้ว`, codes: shown };
+}
+
+export async function toggleGiftBatchAction(batch: string, active: boolean) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.update(schema.giftCodes).set({ active }).where(eq(schema.giftCodes.batch, batch));
+  revalidatePath("/admin/gifts");
+}
+
+/** ลบได้เฉพาะโค้ดที่ยังไม่มีใครใช้ */
+export async function deleteUnusedGiftsAction(batch: string) {
+  await requireAdmin();
+  const db = await getDb();
+  await db.delete(schema.giftCodes).where(and(eq(schema.giftCodes.batch, batch), eq(schema.giftCodes.usedCount, 0)));
+  revalidatePath("/admin/gifts");
 }

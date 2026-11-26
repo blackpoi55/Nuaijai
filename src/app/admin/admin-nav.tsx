@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Disc3, FlaskConical, Gift, LayoutDashboard, Package, Receipt, Settings, Shield, Ticket, TicketPercent, Users } from "lucide-react";
+import { Disc3, FlaskConical, Gift, LayoutDashboard, PartyPopper, Package, Receipt, Settings, Shield, Ticket, TicketPercent, Users } from "lucide-react";
 
 const ITEMS = [
   { href: "/admin", label: "ภาพรวม", icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/admin/topups", label: "ซองอั่งเปา", icon: Gift },
   { href: "/admin/codes", label: "คำสั่งซื้อ / โค้ด", icon: Ticket },
   { href: "/admin/coupons", label: "คูปอง", icon: TicketPercent },
+  { href: "/admin/gifts", label: "โค้ดแจกของ", icon: PartyPopper },
   { href: "/admin/wheel", label: "วงล้อ", icon: Disc3 },
   { href: "/admin/tests", label: "รายการเทสแอดมิน", icon: FlaskConical },
   { href: "/admin/settings", label: "ตั้งค่าร้าน", icon: Settings },

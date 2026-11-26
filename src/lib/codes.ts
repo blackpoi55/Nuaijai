@@ -16,6 +16,13 @@ export function normalizeCode(raw: unknown): string | null {
   return s.length === CODE_LEN ? s : null;
 }
 
+/** โค้ดแจก: ตัวพิมพ์ใหญ่ ตัดช่องว่างและขีดทิ้ง (พิมพ์ LOY-2026 หรือ LOY2026 ได้เหมือนกัน) — เกมรับโค้ดยาวได้ไม่เกิน 24 ตัว */
+export function normalizeGiftCode(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.toUpperCase().replace(/[\s-]+/g, "");
+  return /^[A-Z0-9_]{3,24}$/.test(s) ? s : null;
+}
+
 export function prettyCode(code: string): string {
   return code.match(/.{1,4}/g)?.join("-") ?? code;
 }
