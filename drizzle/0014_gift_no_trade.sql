@@ -1,0 +1,1 @@
+ALTER TABLE "gift_codes" ADD COLUMN "no_trade" boolean DEFAULT false NOT NULL;

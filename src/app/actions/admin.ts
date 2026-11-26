@@ -501,6 +501,7 @@ export async function createGiftCodesAction(_: GiftState, f: FormData): Promise<
   const quantity = custom ? 1 : Math.min(500, Math.max(1, int(f, "quantity") || 1));
   const maxUses = Math.min(100000, Math.max(1, int(f, "maxUses") || 1));
   const minLevel = Math.min(100000, Math.max(0, int(f, "minLevel") || 0));
+  const noTrade = f.get("noTrade") === "on";
   const bkk = (k: string) => {
     const v = str(f, k);
     return v ? new Date(`${v}:00+07:00`) : null;
@@ -523,7 +524,7 @@ export async function createGiftCodesAction(_: GiftState, f: FormData): Promise<
   try {
     await db
       .insert(schema.giftCodes)
-      .values([...codes].map((code) => ({ code, passKeys, label, minLevel, maxUses, startsAt, expiresAt, batch, note, createdBy: admin.id })));
+      .values([...codes].map((code) => ({ code, passKeys, label, minLevel, noTrade, maxUses, startsAt, expiresAt, batch, note, createdBy: admin.id })));
   } catch (e) {
     if (String(e).includes("unique")) return { error: custom ? "มีโค้ดชื่อนี้อยู่แล้ว" : "สุ่มโค้ดชนกัน ลองกดสร้างใหม่" };
     throw e;

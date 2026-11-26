@@ -319,6 +319,7 @@ export const giftCodes = pgTable(
     passKeys: jsonb("pass_keys").$type<string[]>().notNull(), // ซ้ำได้ = หลายชิ้น
     label: text("label").notNull(),
     minLevel: integer("min_level").notNull().default(0),
+    noTrade: boolean("no_trade").notNull().default(false), // true = ของที่ได้ติดตัว เทรด/ขายให้คนอื่นไม่ได้ (meta.bound ในเกม)
     maxUses: integer("max_uses").notNull().default(1),
     usedCount: integer("used_count").notNull().default(0),
     startsAt: timestamp("starts_at", { withTimezone: true }),

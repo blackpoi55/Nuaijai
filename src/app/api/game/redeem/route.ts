@@ -6,7 +6,8 @@ import { normalizeCode, normalizeGiftCode } from "@/lib/codes";
 import { notifyUser } from "@/lib/notify";
 
 // เรียกจากเซิร์ฟเวอร์เกม (HttpService) เท่านั้น — ต้องมี header x-api-key = GAME_API_KEY
-// body: { code, userId, name?, displayName?, owned?: string[], level?: number }
+// body: { code, userId, name?, displayName?, owned?: string[], level?: number, canBind?: boolean }
+// โค้ดแจกแบบห้ามเทรดตอบ bound: true (เกมใส่ของเป็นของติดตัว) • เซิร์ฟเวอร์เกมรุ่นเก่าที่ไม่ส่ง canBind ใช้โค้ดแบบนี้ไม่ได้ (ตอบ "update")
 // ตอบ: { ok: true, passes: string[] } | { ok: false, error: "nocode" | "used" | "owned" | "bad" | "level" | "expired" | "notyet" | "soldout", passes?, need? }
 // เรียกซ้ำด้วย userId เดิมได้ผลเดิม (กันเน็ตหลุดกลางทาง)
 // โค้ด 2 แบบ: โค้ดที่ซื้อ (12 ตัว ใช้ได้ครั้งเดียว) • โค้ดแจกของแอดมิน (gift_codes: หลายคน คนละครั้ง จำกัดเลเวล/เวลาได้)
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
 
   const db = await getDb();
   const [c] = code ? await db.select().from(schema.codes).where(eq(schema.codes.code, code)).limit(1) : [];
-  if (!c) return redeemGift(gift, userId, owned, level, name, displayName);
+  if (!c) return redeemGift(gift, userId, owned, level, name, displayName, body?.canBind === true);
   if (c.status === "revoked") return NextResponse.json({ ok: false, error: "nocode" });
 
   if (c.status === "used") {
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
 }
 
 /** โค้ดแจกของแอดมิน: คนละครั้งต่อ Roblox ID, ครบจำนวนแล้วปิดเอง */
-async function redeemGift(code: string, userId: number, owned: string[], level: number | null, name: string | null, displayName: string | null) {
+async function redeemGift(code: string, userId: number, owned: string[], level: number | null, name: string | null, displayName: string | null, canBind: boolean) {
   const db = await getDb();
   const [g] = await db.select().from(schema.giftCodes).where(eq(schema.giftCodes.code, code)).limit(1);
   if (!g || !g.active) return NextResponse.json({ ok: false, error: "nocode" });
@@ -110,7 +111,10 @@ async function redeemGift(code: string, userId: number, owned: string[], level: 
     .from(schema.giftRedemptions)
     .where(and(eq(schema.giftRedemptions.giftId, g.id), eq(schema.giftRedemptions.robloxId, userId)))
     .limit(1);
-  if (mine) return NextResponse.json({ ok: true, passes: g.passKeys, again: true });
+  const bound = g.noTrade ? { bound: true } : {};
+  // เซิร์ฟเวอร์เกมรุ่นเก่าใส่ของแบบเทรดได้ → ไม่ให้ใช้โค้ดห้ามเทรดที่นั่น (ไม่นับว่าใช้แล้ว)
+  if (g.noTrade && !canBind) return NextResponse.json({ ok: false, error: "update" });
+  if (mine) return NextResponse.json({ ok: true, passes: g.passKeys, again: true, ...bound });
 
   const now = new Date();
   if (g.startsAt && g.startsAt > now) return NextResponse.json({ ok: false, error: "notyet" });
@@ -140,7 +144,7 @@ async function redeemGift(code: string, userId: number, owned: string[], level: 
     throw e;
   });
   if (res === "soldout") return NextResponse.json({ ok: false, error: "soldout" });
-  if (res === "again") return NextResponse.json({ ok: true, passes: g.passKeys, again: true });
+  if (res === "again") return NextResponse.json({ ok: true, passes: g.passKeys, again: true, ...bound });
 
   if (!name)
     after(async () => {
@@ -151,7 +155,7 @@ async function redeemGift(code: string, userId: number, owned: string[], level: 
           .set({ name: r.name, displayName: displayName ?? r.displayName })
           .where(and(eq(schema.giftRedemptions.giftId, g.id), eq(schema.giftRedemptions.robloxId, userId)));
     });
-  return NextResponse.json({ ok: true, passes: g.passKeys });
+  return NextResponse.json({ ok: true, passes: g.passKeys, ...bound });
 }
 
 export async function GET(req: Request) {

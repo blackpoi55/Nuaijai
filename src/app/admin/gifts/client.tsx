@@ -70,6 +70,13 @@ export function GiftForm({ products }: { products: Opt[] }) {
             </div>
           ))}
         </div>
+        <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-black/20 p-3">
+          <input type="checkbox" name="noTrade" defaultChecked className="mt-0.5 size-5 shrink-0 accent-pink-500" />
+          <span className="text-sm">
+            <b>🔒 ห้ามเทรด</b>
+            <span className="block text-xs text-dim">ของที่ได้ติดตัวผู้เล่น ใช้ได้ปกติ แต่เทรด ขายแผง ใส่วงล้อ หรือส่งต่อให้คนอื่นไม่ได้ (พาสเทรดไม่ได้อยู่แล้ว)</span>
+          </span>
+        </label>
         <p className="mt-1 text-xs text-dim">กล่อง/ตั๋วใส่จำนวนได้ • ใส่ของหลายอย่างในโค้ดเดียวได้ (กด +) • ของที่ปิดขายอยู่ ต้องมีในเกมแล้ว (Publish) ก่อนแจก</p>
       </div>
 

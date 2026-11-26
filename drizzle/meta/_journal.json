@@ -99,6 +99,13 @@
       "when": 1795675557020,
       "tag": "0013_bonus_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795676663921,
+      "tag": "0014_gift_no_trade",
+      "breakpoints": true
     }
   ]
 }

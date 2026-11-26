@@ -57,6 +57,7 @@ export default async function AdminGifts() {
                   </p>
                   <p className="mt-1 text-xs text-dim">
                     {many && `${items.length} โค้ด • `}ใช้แล้ว {used}/{total} คน
+                    {first.noTrade && <span className="text-pink-300"> • 🔒 ห้ามเทรด</span>}
                     {first.minLevel > 0 && <> • เลเวล {first.minLevel}+</>}
                     {first.startsAt && <span className={waiting ? "text-gold" : ""}> • เริ่ม {thaiDate.format(first.startsAt)}</span>}
                     {first.expiresAt && <span className={ended ? "text-danger" : ""}> • หมดอายุ {thaiDate.format(first.expiresAt)}</span>}
